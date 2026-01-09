@@ -300,19 +300,8 @@ class OverlayService : Service() {
         isDrawModeEnabled = !isDrawModeEnabled
         drawingView?.drawingEnabled = isDrawModeEnabled
         
-        // Update CANVAS window flags (not toolbar!)
-        canvasView?.let { view ->
-            canvasParams?.let { params ->
-                if (!isDrawModeEnabled && !isSPenModeEnabled) {
-                    // Make canvas pass-through
-                    params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-                } else {
-                    // Canvas receives touches
-                    params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
-                }
-                windowManager.updateViewLayout(view, params)
-            }
-        }
+        // Update canvas touchability
+        updateCanvasTouchability()
         
         // Update button tint
         toolbarView?.findViewById<ImageButton>(R.id.btnDrawMode)?.let { btn ->
@@ -324,20 +313,35 @@ class OverlayService : Service() {
         isSPenModeEnabled = !isSPenModeEnabled
         drawingView?.sPenOnlyMode = isSPenModeEnabled
         
-        // Also update canvas flags
+        // When S Pen mode is ON:
+        // - Make canvas non-touchable so FINGERS pass through to phone
+        // - S Pen should still work on Samsung devices (stylus input is handled differently)
+        updateCanvasTouchability()
+        
+        toolbarView?.findViewById<ImageButton>(R.id.btnSPenMode)?.let { btn ->
+            btn.setColorFilter(if (isSPenModeEnabled) 0xFF2196F3.toInt() else 0xFFFFFFFF.toInt())
+        }
+    }
+    
+    /**
+     * Updates canvas touchability based on current mode.
+     * Canvas is non-touchable when:
+     * - Draw mode is OFF, OR
+     * - S Pen mode is ON (fingers pass through, stylus may still work on Samsung)
+     */
+    private fun updateCanvasTouchability() {
         canvasView?.let { view ->
             canvasParams?.let { params ->
-                if (!isDrawModeEnabled && !isSPenModeEnabled) {
+                // Non-touchable if draw mode is off OR if S Pen mode is on
+                val shouldBeNonTouchable = !isDrawModeEnabled || isSPenModeEnabled
+                
+                if (shouldBeNonTouchable) {
                     params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
                 } else {
                     params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
                 }
                 windowManager.updateViewLayout(view, params)
             }
-        }
-        
-        toolbarView?.findViewById<ImageButton>(R.id.btnSPenMode)?.let { btn ->
-            btn.setColorFilter(if (isSPenModeEnabled) 0xFF2196F3.toInt() else 0xFFFFFFFF.toInt())
         }
     }
 
