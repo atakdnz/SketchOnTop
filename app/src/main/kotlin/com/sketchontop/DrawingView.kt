@@ -65,14 +65,21 @@ class DrawingView @JvmOverloads constructor(
     /** Currently selected tool */
     private var currentTool: Tool = Tool.PEN
     
-    /** Base stroke width before pressure adjustment */
-    private var baseStrokeWidth: Float = 10f
+    /** Per-tool stroke widths - each tool remembers its own size */
+    private val toolStrokeWidths = mutableMapOf(
+        Tool.PEN to 8f,
+        Tool.HIGHLIGHTER to 20f,
+        Tool.ERASER to 30f
+    )
     
     /** Current drawing color */
     private var currentColor: Int = Color.BLACK
     
     /** Alpha value for highlighter (0-255) */
     private val highlighterAlpha: Int = 80
+    
+    /** Whether drawings are currently visible */
+    private var drawingsVisible: Boolean = true
     
     /** Whether to ignore finger input when stylus is preferred */
     var stylusOnlyMode: Boolean = false
@@ -129,6 +136,9 @@ class DrawingView @JvmOverloads constructor(
     
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        
+        // Only draw if visibility is enabled
+        if (!drawingsVisible) return
         
         // Draw the off-screen bitmap (contains all completed strokes)
         bitmap?.let { canvas.drawBitmap(it, 0f, 0f, bitmapPaint) }
@@ -216,13 +226,16 @@ class DrawingView @JvmOverloads constructor(
         // Read pressure value (0.0 to 1.0, with some devices going higher)
         val pressure = event.pressure.coerceIn(0f, 1f)
         
+        // Get base width for the effective tool
+        val baseWidth = toolStrokeWidths[effectiveTool] ?: 10f
+        
         // Map pressure to stroke width:
         // At pressure 0: use 50% of base width
         // At pressure 1: use 100% of base width
         val dynamicWidth = if (isStylus || isStylusEraser) {
-            baseStrokeWidth * (0.5f + pressure * 0.5f)
+            baseWidth * (0.5f + pressure * 0.5f)
         } else {
-            baseStrokeWidth  // No pressure adjustment for finger input
+            baseWidth  // No pressure adjustment for finger input
         }
         
         // --------------------------------
@@ -394,12 +407,32 @@ class DrawingView @JvmOverloads constructor(
     }
     
     /**
-     * Sets the stroke width.
+     * Sets the stroke width for the current tool.
      */
     fun setStrokeWidth(width: Float) {
-        baseStrokeWidth = width.coerceIn(1f, 100f)
-        currentPaint.strokeWidth = baseStrokeWidth
+        val clampedWidth = width.coerceIn(1f, 100f)
+        toolStrokeWidths[currentTool] = clampedWidth
+        currentPaint.strokeWidth = clampedWidth
     }
+    
+    /**
+     * Gets the stroke width for the current tool.
+     */
+    fun getStrokeWidth(): Float = toolStrokeWidths[currentTool] ?: 10f
+    
+    /**
+     * Toggles visibility of all drawings.
+     */
+    fun toggleDrawingsVisibility(): Boolean {
+        drawingsVisible = !drawingsVisible
+        invalidate()
+        return drawingsVisible
+    }
+    
+    /**
+     * Gets whether drawings are visible.
+     */
+    fun areDrawingsVisible(): Boolean = drawingsVisible
     
     /**
      * Undoes the last stroke.
