@@ -67,7 +67,9 @@ class OverlayService : Service() {
         const val CHANNEL_ID = "SketchOnTopChannel"
         const val NOTIFICATION_ID = 1
         const val ACTION_STOP = "com.sketchontop.STOP"
-        const val CANVAS_RESET_DELAY_MS = 100L
+        // Time to keep canvas non-touchable after finger touch
+        // Long enough for user interaction, then resets for stylus
+        const val CANVAS_RESET_DELAY_MS = 2000L
     }
 
     override fun onCreate() {
