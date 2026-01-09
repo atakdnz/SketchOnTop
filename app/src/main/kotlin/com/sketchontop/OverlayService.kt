@@ -306,6 +306,7 @@ class OverlayService : Service() {
                 object : SeekBar.OnSeekBarChangeListener {
                     override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                         drawingView?.setStrokeWidth((progress + 2).toFloat())
+                        updateBrushPreview()
                     }
                     override fun onStartTrackingTouch(seekBar: SeekBar?) {}
                     override fun onStopTrackingTouch(seekBar: SeekBar?) {}
@@ -315,27 +316,75 @@ class OverlayService : Service() {
     }
 
     private fun setupColorPicker(view: View) {
-        val colorPicker = view.findViewById<View>(R.id.colorPickerGradient)
-        val colorIndicator = view.findViewById<View>(R.id.currentColorIndicator)
+        val brushPreview = view.findViewById<View>(R.id.brushPreview)
         
+        // Preset color click handlers
+        val presetColors = mapOf(
+            R.id.colorBlack to 0xFF000000.toInt(),
+            R.id.colorWhite to 0xFFFFFFFF.toInt(),
+            R.id.colorRed to 0xFFFF0000.toInt(),
+            R.id.colorBlue to 0xFF0000FF.toInt(),
+            R.id.colorGreen to 0xFF00FF00.toInt(),
+            R.id.colorYellow to 0xFFFFFF00.toInt()
+        )
+        
+        for ((viewId, color) in presetColors) {
+            view.findViewById<View>(viewId).setOnClickListener {
+                selectColor(color)
+            }
+        }
+        
+        // Rainbow gradient slider for custom color
+        val colorPicker = view.findViewById<View>(R.id.colorPickerGradient)
         colorPicker.setOnTouchListener { v, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
                     val ratio = (event.x.coerceIn(0f, v.width.toFloat()) / v.width)
                     val color = Color.HSVToColor(floatArrayOf(ratio * 360f, 1f, 1f))
-                    
-                    currentColor = color
-                    drawingView?.setColor(color)
-                    colorIndicator.setBackgroundColor(color)
-                    
-                    if (drawingView?.getTool() == DrawingView.Tool.ERASER) {
-                        selectTool(DrawingView.Tool.PEN)
-                    }
+                    selectColor(color)
                     true
                 }
                 else -> false
             }
         }
+        
+        // Initial brush preview update
+        updateBrushPreview()
+    }
+    
+    /**
+     * Selects a color and updates the UI and drawing view.
+     */
+    private fun selectColor(color: Int) {
+        currentColor = color
+        drawingView?.setColor(color)
+        updateBrushPreview()
+        
+        if (drawingView?.getTool() == DrawingView.Tool.ERASER) {
+            selectTool(DrawingView.Tool.PEN)
+        }
+    }
+    
+    /**
+     * Updates the brush preview to show current color and size.
+     */
+    private fun updateBrushPreview() {
+        val brushPreview = toolbarView?.findViewById<View>(R.id.brushPreview) ?: return
+        val strokeWidth = drawingView?.getStrokeWidth() ?: 10f
+        
+        // Update size (clamp between 6dp and 36dp for visibility)
+        val sizePx = strokeWidth.coerceIn(6f, 36f).toInt()
+        val params = brushPreview.layoutParams
+        params.width = sizePx
+        params.height = sizePx
+        brushPreview.layoutParams = params
+        
+        // Update color using GradientDrawable for circular shape
+        val drawable = android.graphics.drawable.GradientDrawable().apply {
+            shape = android.graphics.drawable.GradientDrawable.OVAL
+            setColor(currentColor)
+        }
+        brushPreview.background = drawable
     }
 
     private fun setupGradientPresets() {

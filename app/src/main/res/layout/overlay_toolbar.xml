@@ -178,21 +178,90 @@
             android:layout_marginVertical="4dp"
             android:background="#40FFFFFF" />
 
-        <!-- Color picker -->
-        <View
-            android:id="@+id/colorPickerGradient"
-            android:layout_width="108dp"
-            android:layout_height="20dp"
+        <!-- Quick Color Presets -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
-            android:background="@drawable/gradient_color_picker" />
+            android:orientation="horizontal">
 
-        <View
-            android:id="@+id/currentColorIndicator"
-            android:layout_width="28dp"
-            android:layout_height="28dp"
+            <View
+                android:id="@+id/colorBlack"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_margin="2dp"
+                android:background="#FF000000" />
+
+            <View
+                android:id="@+id/colorWhite"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_margin="2dp"
+                android:background="#FFFFFFFF" />
+
+            <View
+                android:id="@+id/colorRed"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_margin="2dp"
+                android:background="#FFFF0000" />
+
+            <View
+                android:id="@+id/colorBlue"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_margin="2dp"
+                android:background="#FF0000FF" />
+
+            <View
+                android:id="@+id/colorGreen"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_margin="2dp"
+                android:background="#FF00FF00" />
+
+            <View
+                android:id="@+id/colorYellow"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_margin="2dp"
+                android:background="#FFFFFF00" />
+
+        </LinearLayout>
+
+        <!-- Brush Preview + Custom Picker -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
             android:layout_marginTop="4dp"
-            android:background="@color/black" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <!-- Brush preview - shows color and size -->
+            <FrameLayout
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="#40000000">
+
+                <View
+                    android:id="@+id/brushPreview"
+                    android:layout_width="10dp"
+                    android:layout_height="10dp"
+                    android:layout_gravity="center"
+                    android:background="@drawable/brush_preview_circle" />
+
+            </FrameLayout>
+
+            <!-- Rainbow slider for custom color -->
+            <View
+                android:id="@+id/colorPickerGradient"
+                android:layout_width="70dp"
+                android:layout_height="24dp"
+                android:layout_marginStart="4dp"
+                android:background="@drawable/gradient_color_picker" />
+
+        </LinearLayout>
 
         <!-- Gradient presets -->
         <HorizontalScrollView
