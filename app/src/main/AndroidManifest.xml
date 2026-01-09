@@ -38,20 +38,6 @@
                 android:value="screen_annotation" />
         </service>
         
-        <!-- Accessibility Service for enhanced S Pen mode -->
-        <service
-            android:name=".TouchAccessibilityService"
-            android:exported="true"
-            android:label="SketchOnTop S Pen Mode"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/accessibility_service_config" />
-        </service>
-        
     </application>
 
 </manifest>
