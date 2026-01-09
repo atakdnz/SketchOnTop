@@ -125,8 +125,9 @@ class OverlayService : Service() {
      * Creates the overlay window with drawing view and toolbar.
      */
     private fun createOverlay() {
-        // Inflate the overlay layout
-        val inflater = getSystemService(Context.LAYOUT_INFLATER_SERVICE) as LayoutInflater
+        // Use theme context for proper vector drawable inflation
+        val themedContext = android.view.ContextThemeWrapper(this, R.style.Theme_SketchOnTop)
+        val inflater = LayoutInflater.from(themedContext)
         overlayView = inflater.inflate(R.layout.overlay_layout, null)
         
         // Setup the window parameters
@@ -138,10 +139,9 @@ class OverlayService : Service() {
             else
                 @Suppress("DEPRECATION")
                 WindowManager.LayoutParams.TYPE_PHONE,
-            // Initially set to receive touches
+            // Make it touchable but not focusable
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         )
         params.gravity = Gravity.TOP or Gravity.START

@@ -23,8 +23,8 @@
         android:padding="12dp"
         android:scaleType="fitCenter"
         android:visibility="gone"
-        app:srcCompat="@drawable/ic_pen"
-        app:tint="@color/toolbar_icon_tint" />
+        android:src="@drawable/ic_pen"
+        android:tint="@color/toolbar_icon_tint" />
 
     <!-- Floating toolbar -->
     <LinearLayout
@@ -51,8 +51,8 @@
                 android:contentDescription="Minimize"
                 android:padding="6dp"
                 android:scaleType="fitCenter"
-                app:srcCompat="@drawable/ic_minimize"
-                app:tint="@color/toolbar_icon_tint" />
+                android:src="@drawable/ic_minimize"
+                android:tint="@color/toolbar_icon_tint" />
 
             <ImageButton
                 android:id="@+id/btnToggleVisibility"
@@ -62,8 +62,8 @@
                 android:contentDescription="Toggle drawings"
                 android:padding="6dp"
                 android:scaleType="fitCenter"
-                app:srcCompat="@drawable/ic_visibility"
-                app:tint="@color/toolbar_icon_tint" />
+                android:src="@drawable/ic_visibility"
+                android:tint="@color/toolbar_icon_tint" />
 
             <ImageButton
                 android:id="@+id/btnClose"
@@ -73,8 +73,8 @@
                 android:contentDescription="Close"
                 android:padding="6dp"
                 android:scaleType="fitCenter"
-                app:srcCompat="@drawable/ic_close"
-                app:tint="#FFFF5252" />
+                android:src="@drawable/ic_close"
+                android:tint="#FFFF5252" />
 
         </LinearLayout>
 
@@ -98,8 +98,8 @@
                 android:contentDescription="Draw mode"
                 android:padding="6dp"
                 android:scaleType="fitCenter"
-                app:srcCompat="@drawable/ic_draw_mode"
-                app:tint="#FF4CAF50" />
+                android:src="@drawable/ic_draw_mode"
+                android:tint="#FF4CAF50" />
 
             <ImageButton
                 android:id="@+id/btnSPenMode"
@@ -109,8 +109,8 @@
                 android:contentDescription="S Pen mode"
                 android:padding="6dp"
                 android:scaleType="fitCenter"
-                app:srcCompat="@drawable/ic_stylus"
-                app:tint="@color/toolbar_icon_tint" />
+                android:src="@drawable/ic_stylus"
+                android:tint="@color/toolbar_icon_tint" />
 
             <ImageButton
                 android:id="@+id/btnGradientMode"
@@ -120,8 +120,8 @@
                 android:contentDescription="Gradient"
                 android:padding="6dp"
                 android:scaleType="fitCenter"
-                app:srcCompat="@drawable/ic_gradient"
-                app:tint="@color/toolbar_icon_tint" />
+                android:src="@drawable/ic_gradient"
+                android:tint="@color/toolbar_icon_tint" />
 
         </LinearLayout>
 
@@ -145,8 +145,8 @@
                 android:contentDescription="Pen"
                 android:padding="6dp"
                 android:scaleType="fitCenter"
-                app:srcCompat="@drawable/ic_pen"
-                app:tint="@color/toolbar_icon_tint" />
+                android:src="@drawable/ic_pen"
+                android:tint="@color/toolbar_icon_tint" />
 
             <ImageButton
                 android:id="@+id/btnHighlighter"
@@ -156,8 +156,8 @@
                 android:contentDescription="Highlighter"
                 android:padding="6dp"
                 android:scaleType="fitCenter"
-                app:srcCompat="@drawable/ic_highlighter"
-                app:tint="@color/toolbar_icon_tint" />
+                android:src="@drawable/ic_highlighter"
+                android:tint="@color/toolbar_icon_tint" />
 
             <ImageButton
                 android:id="@+id/btnEraser"
@@ -167,8 +167,8 @@
                 android:contentDescription="Eraser"
                 android:padding="6dp"
                 android:scaleType="fitCenter"
-                app:srcCompat="@drawable/ic_eraser"
-                app:tint="@color/toolbar_icon_tint" />
+                android:src="@drawable/ic_eraser"
+                android:tint="@color/toolbar_icon_tint" />
 
         </LinearLayout>
 
@@ -247,8 +247,8 @@
                 android:contentDescription="Undo"
                 android:padding="6dp"
                 android:scaleType="fitCenter"
-                app:srcCompat="@drawable/ic_undo"
-                app:tint="@color/toolbar_icon_tint" />
+                android:src="@drawable/ic_undo"
+                android:tint="@color/toolbar_icon_tint" />
 
             <ImageButton
                 android:id="@+id/btnRedo"
@@ -258,8 +258,8 @@
                 android:contentDescription="Redo"
                 android:padding="6dp"
                 android:scaleType="fitCenter"
-                app:srcCompat="@drawable/ic_redo"
-                app:tint="@color/toolbar_icon_tint" />
+                android:src="@drawable/ic_redo"
+                android:tint="@color/toolbar_icon_tint" />
 
             <ImageButton
                 android:id="@+id/btnClear"
@@ -269,8 +269,8 @@
                 android:contentDescription="Clear"
                 android:padding="6dp"
                 android:scaleType="fitCenter"
-                app:srcCompat="@drawable/ic_clear"
-                app:tint="@color/toolbar_icon_tint" />
+                android:src="@drawable/ic_clear"
+                android:tint="@color/toolbar_icon_tint" />
 
         </LinearLayout>
 
