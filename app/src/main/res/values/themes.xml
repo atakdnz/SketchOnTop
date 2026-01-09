@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Base application theme -->
+    <style name="Theme.SketchOnTop" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#2196F3</item>
+        <item name="colorPrimaryVariant">#1976D2</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorSecondary">#03DAC6</item>
+        <item name="colorSecondaryVariant">#018786</item>
+        <item name="colorOnSecondary">#000000</item>
+    </style>
+
+    <!-- Transparent fullscreen theme for overlay Activity -->
+    <style name="Theme.SketchOnTop.Transparent" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- Make window transparent -->
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+        
+        <!-- Fullscreen flags -->
+        <item name="android:windowFullscreen">true</item>
+        
+        <!-- Allow drawing behind status/nav bars -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        
+        <!-- Disable default animations to feel like an overlay -->
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+
+</resources>

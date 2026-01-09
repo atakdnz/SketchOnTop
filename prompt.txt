@@ -1,0 +1,77 @@
+I want you to build an “Epic Pen” style screen‑annotation app for Android, using Kotlin and classic Views (not Compose) as the starting point.
+High‑level behavior
+	•	The app shows a full‑screen transparent overlay that lets me draw on top of whatever is currently on the screen (like Epic Pen on Windows).
+	•	I need a small toolbar to select tools (pen, highlighter, eraser, colors, stroke width, undo/redo, clear, close overlay).
+	•	It must work well with Samsung S Pen and generic styluses: using the pen side button as a temporary eraser while pressed.
+Project / UI structure
+	1.	Use a normal Activity (not system‑level hacking for now) that acts as an overlay:
+	•	Transparent background so I can see the app underneath.
+	•	Use a theme like  Theme.Translucent.NoTitleBar.Fullscreen  or an equivalent custom transparent theme in  styles.xml  and apply it to this Activity.
+	•	Root layout: a full‑screen drawing view plus a small overlay toolbar (e.g., at the top or side).
+	2.	Implement a custom  DrawingView : View  in Kotlin:
+	•	It should maintain:
+	•	An off‑screen  Bitmap  and associated  Canvas  to store what has been drawn.
+	•	A list of stroke objects for undo/redo (each stroke =  Path  +  Paint  snapshot).
+	•	Override  onDraw(canvas: Canvas)  to draw the bitmap (or all strokes) and the current in‑progress stroke.
+	3.	Tools / toolbar:
+	•	Pen tool: solid color, adjustable thickness, anti‑aliased, round caps and joins.
+	•	Highlighter tool: similar to pen but with lower alpha (e.g., 30–50%) and maybe thicker stroke.
+	•	Eraser tool: either:
+	•	Use a  Paint  with  Xfermode  (CLEAR mode) to erase from the bitmap, or
+	•	Use white/transparent strokes, depending on how you implement the canvas.
+	•	Buttons for:
+	•	Pen, Highlighter, Eraser
+	•	Color picker (simple fixed colors is fine)
+	•	Stroke width slider
+	•	Undo, Redo, Clear
+	•	Close overlay (finish the Activity)
+Touch and stylus handling (very important)
+In  DrawingView.onTouchEvent(event: MotionEvent) :
+	1.	Stylus‑first behavior
+	•	Detect tool type: use  event.getToolType(pointerIndex)  and prefer  TOOL_TYPE_STYLUS .
+	•	If the pointer is not stylus (e.g., finger) and a setting “stylus only” is enabled, ignore drawing for that event.
+	•	This prevents accidental finger drawing while using S Pen.
+	2.	Basic drawing logic
+	•	Handle standard actions:
+	•	 ACTION_DOWN : start a new stroke,  Path.moveTo(x, y) , store a new stroke (path + paint snapshot), and invalidate the view.
+	•	 ACTION_MOVE : add points ( quadTo  for smoothing or  lineTo ) using current and historical positions; call  invalidate() .
+	•	 ACTION_UP  /  ACTION_CANCEL : finish the stroke and keep it in the stroke list.
+	•	Use  requestUnbufferedDispatch(event)  when needed for low‑latency drawing on  ACTION_DOWN .
+	3.	Pressure, tilt, orientation
+	•	Read stylus pressure to vary stroke width:
+	•	 val pressure = event.pressure  or  event.getAxisValue(MotionEvent.AXIS_PRESSURE) .
+	•	Map pressure range (0–1) to a stroke width range (e.g., 1–10 px).
+	•	Optionally read tilt/orientation:
+	•	 event.getAxisValue(MotionEvent.AXIS_TILT)  and  event.orientation  to experiment with brush effects later.
+	4.	S Pen / stylus button → eraser
+	•	Use  event.buttonState  and  MotionEvent.BUTTON_STYLUS_PRIMARY  and  BUTTON_STYLUS_SECONDARY  to detect the side button of the S Pen or other styluses.
+	•	Behavior:
+	•	When stylus is touching the screen ( ACTION_DOWN / MOVE / UP ) and  buttonState  includes  BUTTON_STYLUS_PRIMARY , treat the strokes as eraser strokes, regardless of the currently selected tool.
+	•	When the button is not pressed, use the selected tool (pen or highlighter).
+	•	This should be checked on each relevant action:
+	•	Example pattern:
+	•	 ACTION_DOWN : if button pressed → start erasing stroke; else → start drawing stroke.
+	•	 ACTION_MOVE : if button pressed → erase along path; else → draw along path.
+	•	The goal: hold S Pen button to temporarily erase, release to go back to previous tool, similar to Samsung Notes.
+	5.	Eraser vs stylus tool type
+	•	Also check  event.getToolType(pointerIndex)  for  TOOL_TYPE_ERASER  if the device exposes that, and treat those strokes as eraser.
+Device / feature checks
+	•	Optionally add a small helper to check whether stylus is supported:
+	•	For example, during a MotionEvent, if  getToolType  returns  TOOL_TYPE_STYLUS  at least once, treat the device as stylus capable.
+	•	If the device has no stylus, the app should still work with finger input; just skip S Pen‑specific behavior.
+S Pen Remote (optional, not required for v1)
+	•	For now, only implement on‑screen stylus button behavior via  MotionEvent.buttonState .
+	•	Optionally, note in comments where a future integration with Samsung’s S Pen Remote SDK could be added for Air actions (hover/button without touch).
+Implementation details to include
+	•	Kotlin code for:
+	•	 DrawingView  class with:
+	•	Fields: bitmap, canvas, currentPath, currentPaint, stroke list, redo list.
+	•	Methods: setTool(type), setColor, setStrokeWidth, undo, redo, clear.
+	•	Full  onDraw  and  onTouchEvent  implementations including stylus detection, pressure, and button‑based erasing.
+	•	Activity hosting the view and toolbar:
+	•	Layout XML with transparent background and a toolbar.
+	•	Theme configuration in  AndroidManifest.xml  and  styles.xml  for transparent, fullscreen Activity.
+	•	Please:
+	•	Use idiomatic Kotlin.
+	•	Comment key parts: stylus detection, pressure mapping, buttonState handling, and eraser mode switching.
+	•	Keep the project runnable in Android Studio with minimal setup.

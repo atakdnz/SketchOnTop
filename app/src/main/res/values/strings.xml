@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SketchOnTop</string>
+    <string name="pen">Pen</string>
+    <string name="highlighter">Highlighter</string>
+    <string name="eraser">Eraser</string>
+    <string name="undo">Undo</string>
+    <string name="redo">Redo</string>
+    <string name="clear">Clear</string>
+    <string name="close">Close</string>
+    <string name="stroke_width">Stroke Width</string>
+</resources>

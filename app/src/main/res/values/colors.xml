@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary drawing colors -->
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="red">#FFE53935</color>
+    <color name="blue">#FF1E88E5</color>
+    <color name="green">#FF43A047</color>
+    <color name="yellow">#FFFDD835</color>
+    <color name="orange">#FFFB8C00</color>
+    <color name="purple">#FF8E24AA</color>
+    
+    <!-- Toolbar colors -->
+    <color name="toolbar_background">#E6303030</color>
+    <color name="toolbar_button_selected">#4D2196F3</color>
+    <color name="toolbar_icon_tint">#FFFFFFFF</color>
+    
+    <!-- Overlay -->
+    <color name="transparent">#00000000</color>
+</resources>
