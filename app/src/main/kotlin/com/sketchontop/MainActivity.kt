@@ -46,10 +46,10 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Enable edge-to-edge drawing
-        setupFullscreen()
-        
         setContentView(R.layout.activity_main)
+        
+        // Enable edge-to-edge drawing (after setContentView)
+        setupFullscreen()
         
         // Initialize views
         initViews()
