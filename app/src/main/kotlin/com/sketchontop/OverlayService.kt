@@ -277,6 +277,9 @@ class OverlayService : Service() {
             view.findViewById<ImageButton>(R.id.btnMinimize).setOnClickListener { 
                 minimizeToolbar() 
             }
+            view.findViewById<ImageButton>(R.id.btnSettings).setOnClickListener { 
+                openSettings() 
+            }
             btnExpand?.setOnClickListener { expandToolbar() }
             
             view.findViewById<ImageButton>(R.id.btnToggleVisibility).setOnClickListener { 
@@ -434,6 +437,17 @@ class OverlayService : Service() {
         isToolbarExpanded = true
         toolbar?.visibility = View.VISIBLE
         btnExpand?.visibility = View.GONE
+    }
+    
+    /**
+     * Opens the settings/MainActivity.
+     */
+    private fun openSettings() {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            putExtra(MainActivity.EXTRA_FROM_OVERLAY, true)
+        }
+        startActivity(intent)
     }
 
     private fun toggleDrawingsVisibility() {

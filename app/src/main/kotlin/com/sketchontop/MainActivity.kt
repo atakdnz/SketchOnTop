@@ -12,12 +12,15 @@ import androidx.appcompat.app.AppCompatActivity
 
 /**
  * Main Activity - handles permission request and starts the overlay service.
- * This activity only shows when the user needs to grant permission or control the overlay.
+ * 
+ * On launch: if permission granted, immediately starts overlay and closes.
+ * Only stays open if permission is needed or opened from overlay settings button.
  */
 class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val REQUEST_OVERLAY_PERMISSION = 1001
+        const val EXTRA_FROM_OVERLAY = "from_overlay"
     }
 
     private lateinit var statusText: TextView
@@ -27,8 +30,16 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
         
+        // If permission granted and NOT opened from overlay settings, start immediately
+        val fromOverlay = intent.getBooleanExtra(EXTRA_FROM_OVERLAY, false)
+        if (hasOverlayPermission() && !fromOverlay) {
+            startOverlayService()
+            finish()
+            return
+        }
+        
+        setContentView(R.layout.activity_main)
         initViews()
         setupClickListeners()
         updateUI()
@@ -36,7 +47,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        updateUI()
+        if (::statusText.isInitialized) {
+            updateUI()
+        }
     }
 
     private fun initViews() {
@@ -53,6 +66,7 @@ class MainActivity : AppCompatActivity() {
         
         btnStartOverlay.setOnClickListener {
             startOverlayService()
+            finish() // Close after starting
         }
         
         btnStopOverlay.setOnClickListener {
@@ -88,7 +102,7 @@ class MainActivity : AppCompatActivity() {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             Settings.canDrawOverlays(this)
         } else {
-            true // Permission not needed before Android M
+            true
         }
     }
 
@@ -101,6 +115,7 @@ class MainActivity : AppCompatActivity() {
                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                 Uri.parse("package:$packageName")
             )
+            @Suppress("DEPRECATION")
             startActivityForResult(intent, REQUEST_OVERLAY_PERMISSION)
         }
     }
@@ -111,33 +126,25 @@ class MainActivity : AppCompatActivity() {
         if (requestCode == REQUEST_OVERLAY_PERMISSION) {
             if (hasOverlayPermission()) {
                 Toast.makeText(this, "Permission granted!", Toast.LENGTH_SHORT).show()
-                updateUI()
+                startOverlayService()
+                finish()
             } else {
                 Toast.makeText(this, "Permission denied", Toast.LENGTH_SHORT).show()
             }
+            updateUI()
         }
     }
 
     /**
-     * Starts the overlay service and minimizes the app.
+     * Starts the overlay service.
      */
     private fun startOverlayService() {
-        if (!hasOverlayPermission()) {
-            Toast.makeText(this, "Please grant overlay permission first", Toast.LENGTH_SHORT).show()
-            return
-        }
-        
         val intent = Intent(this, OverlayService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent)
         } else {
             startService(intent)
         }
-        
-        Toast.makeText(this, "Overlay started!", Toast.LENGTH_SHORT).show()
-        
-        // Go to home screen so user can draw over other apps
-        moveTaskToBack(true)
     }
 
     /**
