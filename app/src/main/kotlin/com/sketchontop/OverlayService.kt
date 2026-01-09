@@ -11,7 +11,9 @@ import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
@@ -26,6 +28,9 @@ import androidx.core.app.NotificationCompat
 /**
  * Foreground Service that creates a system overlay for drawing.
  * Uses two separate windows: canvas (can be non-touchable) and toolbar (always touchable).
+ * 
+ * In S Pen mode, the canvas is non-touchable by default (fingers pass through).
+ * When S Pen hovers, the canvas temporarily becomes touchable for drawing.
  */
 class OverlayService : Service() {
 
@@ -37,6 +42,7 @@ class OverlayService : Service() {
     private var canvasParams: WindowManager.LayoutParams? = null
     
     private var drawingView: DrawingView? = null
+    private var hoverDetector: HoverDetectorView? = null
     private var toolbar: LinearLayout? = null
     private var btnExpand: ImageButton? = null
     
@@ -46,11 +52,22 @@ class OverlayService : Service() {
     private var isGradientModeEnabled = false
     private var isToolbarExpanded = true
     private var currentColor = Color.BLACK
+    
+    // S Pen hover state
+    private var isStylusHovering = false
+    private var isStylusDrawing = false
+    private val handler = Handler(Looper.getMainLooper())
+    private val disableCanvasRunnable = Runnable { 
+        if (isSPenModeEnabled && !isStylusDrawing) {
+            setCanvasTouchable(false)
+        }
+    }
 
     companion object {
         const val CHANNEL_ID = "SketchOnTopChannel"
         const val NOTIFICATION_ID = 1
         const val ACTION_STOP = "com.sketchontop.STOP"
+        const val HOVER_TIMEOUT_MS = 500L
     }
 
     override fun onCreate() {
@@ -75,6 +92,7 @@ class OverlayService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        handler.removeCallbacksAndMessages(null)
         removeOverlay()
     }
 
@@ -161,6 +179,7 @@ class OverlayService : Service() {
         
         // Initialize views
         initViews()
+        setupHoverDetection()
         setupToolbar()
         setupGradientPresets()
         
@@ -178,12 +197,80 @@ class OverlayService : Service() {
         canvasView = null
         toolbarView = null
         drawingView = null
+        hoverDetector = null
     }
 
     private fun initViews() {
         drawingView = canvasView?.findViewById(R.id.drawingView)
+        hoverDetector = canvasView?.findViewById(R.id.hoverDetector)
         toolbar = toolbarView?.findViewById(R.id.toolbar)
         btnExpand = toolbarView?.findViewById(R.id.btnExpand)
+    }
+    
+    /**
+     * Sets up S Pen hover detection for dynamic canvas touchability.
+     */
+    private fun setupHoverDetection() {
+        hoverDetector?.onHoverStateChanged = { isHovering, isStylus ->
+            if (isSPenModeEnabled && isStylus) {
+                isStylusHovering = isHovering
+                if (isHovering) {
+                    // S Pen is hovering - enable canvas for drawing
+                    handler.removeCallbacks(disableCanvasRunnable)
+                    setCanvasTouchable(true)
+                } else {
+                    // S Pen left - disable canvas after delay (allows for quick re-hover)
+                    handler.postDelayed(disableCanvasRunnable, HOVER_TIMEOUT_MS)
+                }
+            }
+        }
+        
+        hoverDetector?.onStylusTouchDetected = {
+            if (isSPenModeEnabled) {
+                // Stylus touched - keep canvas enabled
+                isStylusDrawing = true
+                handler.removeCallbacks(disableCanvasRunnable)
+                setCanvasTouchable(true)
+            }
+        }
+        
+        // Also track when drawing ends via DrawingView
+        drawingView?.setOnTouchListener { _, event ->
+            if (isSPenModeEnabled) {
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        isStylusDrawing = true
+                        handler.removeCallbacks(disableCanvasRunnable)
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        isStylusDrawing = false
+                        // Disable canvas after drawing ends (with delay)
+                        handler.postDelayed(disableCanvasRunnable, HOVER_TIMEOUT_MS)
+                    }
+                }
+            }
+            false // Let DrawingView handle the event
+        }
+    }
+    
+    /**
+     * Sets canvas touchability directly.
+     */
+    private fun setCanvasTouchable(touchable: Boolean) {
+        canvasView?.let { view ->
+            canvasParams?.let { params ->
+                if (touchable) {
+                    params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+                } else {
+                    params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                }
+                try {
+                    windowManager.updateViewLayout(view, params)
+                } catch (e: Exception) {
+                    // View might not be attached
+                }
+            }
+        }
     }
 
     private fun setupToolbar() {
@@ -313,9 +400,8 @@ class OverlayService : Service() {
         isSPenModeEnabled = !isSPenModeEnabled
         drawingView?.sPenOnlyMode = isSPenModeEnabled
         
-        // When S Pen mode is ON:
-        // - Make canvas non-touchable so FINGERS pass through to phone
-        // - S Pen should still work on Samsung devices (stylus input is handled differently)
+        // When S Pen mode turns on, make canvas non-touchable initially
+        // It will become touchable when S Pen hovers
         updateCanvasTouchability()
         
         toolbarView?.findViewById<ImageButton>(R.id.btnSPenMode)?.let { btn ->
@@ -325,24 +411,12 @@ class OverlayService : Service() {
     
     /**
      * Updates canvas touchability based on current mode.
-     * Canvas is non-touchable when:
-     * - Draw mode is OFF, OR
-     * - S Pen mode is ON (fingers pass through, stylus may still work on Samsung)
      */
     private fun updateCanvasTouchability() {
-        canvasView?.let { view ->
-            canvasParams?.let { params ->
-                // Non-touchable if draw mode is off OR if S Pen mode is on
-                val shouldBeNonTouchable = !isDrawModeEnabled || isSPenModeEnabled
-                
-                if (shouldBeNonTouchable) {
-                    params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-                } else {
-                    params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
-                }
-                windowManager.updateViewLayout(view, params)
-            }
-        }
+        // If draw mode is off, canvas is non-touchable
+        // If S Pen mode is on, canvas starts non-touchable (hover will enable it)
+        val shouldBeNonTouchable = !isDrawModeEnabled || isSPenModeEnabled
+        setCanvasTouchable(!shouldBeNonTouchable)
     }
 
     private fun toggleGradientMode() {

@@ -4,9 +4,15 @@
     android:layout_height="match_parent"
     android:background="@android:color/transparent">
 
-    <!-- Drawing canvas only - full screen -->
+    <!-- Drawing canvas - full screen -->
     <com.sketchontop.DrawingView
         android:id="@+id/drawingView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- Hover detector - on top, always receives hover events -->
+    <com.sketchontop.HoverDetectorView
+        android:id="@+id/hoverDetector"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
