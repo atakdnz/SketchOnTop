@@ -178,107 +178,22 @@
             android:layout_marginVertical="4dp"
             android:background="#40FFFFFF" />
 
-        <!-- Quick Color Presets -->
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+        <!-- Brush Preview (tap to open color picker page) -->
+        <FrameLayout
+            android:id="@+id/btnOpenColorPicker"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
             android:layout_gravity="center_horizontal"
-            android:orientation="horizontal">
+            android:background="#40000000">
 
             <View
-                android:id="@+id/colorBlack"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:layout_margin="2dp"
-                android:background="#FF000000" />
+                android:id="@+id/brushPreview"
+                android:layout_width="10dp"
+                android:layout_height="10dp"
+                android:layout_gravity="center"
+                android:background="@drawable/brush_preview_circle" />
 
-            <View
-                android:id="@+id/colorWhite"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:layout_margin="2dp"
-                android:background="#FFFFFFFF" />
-
-            <View
-                android:id="@+id/colorRed"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:layout_margin="2dp"
-                android:background="#FFFF0000" />
-
-            <View
-                android:id="@+id/colorBlue"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:layout_margin="2dp"
-                android:background="#FF0000FF" />
-
-            <View
-                android:id="@+id/colorGreen"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:layout_margin="2dp"
-                android:background="#FF00FF00" />
-
-            <View
-                android:id="@+id/colorYellow"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:layout_margin="2dp"
-                android:background="#FFFFFF00" />
-
-        </LinearLayout>
-
-        <!-- Brush Preview + Custom Picker -->
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center_horizontal"
-            android:layout_marginTop="4dp"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
-
-            <!-- Brush preview - shows color and size -->
-            <FrameLayout
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="#40000000">
-
-                <View
-                    android:id="@+id/brushPreview"
-                    android:layout_width="10dp"
-                    android:layout_height="10dp"
-                    android:layout_gravity="center"
-                    android:background="@drawable/brush_preview_circle" />
-
-            </FrameLayout>
-
-            <!-- Rainbow slider for custom color -->
-            <View
-                android:id="@+id/colorPickerGradient"
-                android:layout_width="70dp"
-                android:layout_height="24dp"
-                android:layout_marginStart="4dp"
-                android:background="@drawable/gradient_color_picker" />
-
-        </LinearLayout>
-
-        <!-- Gradient presets -->
-        <HorizontalScrollView
-            android:id="@+id/gradientPresetsContainer"
-            android:layout_width="108dp"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:scrollbars="none"
-            android:visibility="gone">
-
-            <LinearLayout
-                android:id="@+id/gradientPresets"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal" />
-
-        </HorizontalScrollView>
+        </FrameLayout>
 
         <View
             android:layout_width="match_parent"
@@ -342,6 +257,80 @@
                 android:tint="@color/toolbar_icon_tint" />
 
         </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- Color Picker Page (hidden by default, swaps with toolbar) -->
+    <LinearLayout
+        android:id="@+id/colorPickerPage"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/toolbar_background"
+        android:orientation="vertical"
+        android:padding="8dp"
+        android:visibility="gone">
+
+        <!-- Back Button -->
+        <ImageButton
+            android:id="@+id/btnColorPickerBack"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="@drawable/tool_button_background"
+            android:contentDescription="Back"
+            android:padding="6dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_close"
+            android:tint="@color/toolbar_icon_tint" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginVertical="4dp"
+            android:background="#40FFFFFF" />
+
+        <!-- Color Grid Row 1 -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <View android:id="@+id/colorPick1" android:layout_width="36dp" android:layout_height="36dp" android:layout_margin="2dp" android:background="#FF000000" />
+            <View android:id="@+id/colorPick2" android:layout_width="36dp" android:layout_height="36dp" android:layout_margin="2dp" android:background="#FFFFFFFF" />
+            <View android:id="@+id/colorPick3" android:layout_width="36dp" android:layout_height="36dp" android:layout_margin="2dp" android:background="#FFFF0000" />
+        </LinearLayout>
+
+        <!-- Color Grid Row 2 -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <View android:id="@+id/colorPick4" android:layout_width="36dp" android:layout_height="36dp" android:layout_margin="2dp" android:background="#FF00FF00" />
+            <View android:id="@+id/colorPick5" android:layout_width="36dp" android:layout_height="36dp" android:layout_margin="2dp" android:background="#FF0000FF" />
+            <View android:id="@+id/colorPick6" android:layout_width="36dp" android:layout_height="36dp" android:layout_margin="2dp" android:background="#FFFFFF00" />
+        </LinearLayout>
+
+        <!-- Color Grid Row 3 -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <View android:id="@+id/colorPick7" android:layout_width="36dp" android:layout_height="36dp" android:layout_margin="2dp" android:background="#FFFF00FF" />
+            <View android:id="@+id/colorPick8" android:layout_width="36dp" android:layout_height="36dp" android:layout_margin="2dp" android:background="#FF00FFFF" />
+            <View android:id="@+id/colorPick9" android:layout_width="36dp" android:layout_height="36dp" android:layout_margin="2dp" android:background="#FFFF8000" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginVertical="4dp"
+            android:background="#40FFFFFF" />
+
+        <!-- Rainbow Slider -->
+        <View
+            android:id="@+id/rainbowSlider"
+            android:layout_width="120dp"
+            android:layout_height="28dp"
+            android:layout_gravity="center_horizontal"
+            android:background="@drawable/gradient_color_picker" />
 
     </LinearLayout>
 

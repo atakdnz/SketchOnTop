@@ -183,7 +183,6 @@ class OverlayService : Service() {
         initViews()
         setupDrawingViewCallbacks()
         setupToolbar()
-        setupGradientPresets()
         
         // Set default tool
         selectTool(DrawingView.Tool.PEN)
@@ -316,27 +315,44 @@ class OverlayService : Service() {
     }
 
     private fun setupColorPicker(view: View) {
-        val brushPreview = view.findViewById<View>(R.id.brushPreview)
+        val colorPickerPage = toolbarView?.findViewById<View>(R.id.colorPickerPage)
         
-        // Preset color click handlers
-        val presetColors = mapOf(
-            R.id.colorBlack to 0xFF000000.toInt(),
-            R.id.colorWhite to 0xFFFFFFFF.toInt(),
-            R.id.colorRed to 0xFFFF0000.toInt(),
-            R.id.colorBlue to 0xFF0000FF.toInt(),
-            R.id.colorGreen to 0xFF00FF00.toInt(),
-            R.id.colorYellow to 0xFFFFFF00.toInt()
+        // Open color picker page when brush preview is tapped
+        view.findViewById<View>(R.id.btnOpenColorPicker)?.setOnClickListener {
+            toolbar?.visibility = View.GONE
+            colorPickerPage?.visibility = View.VISIBLE
+        }
+        
+        // Back button closes color picker page
+        colorPickerPage?.findViewById<View>(R.id.btnColorPickerBack)?.setOnClickListener {
+            colorPickerPage.visibility = View.GONE
+            toolbar?.visibility = View.VISIBLE
+        }
+        
+        // Color grid click handlers
+        val pickerColors = mapOf(
+            R.id.colorPick1 to 0xFF000000.toInt(),
+            R.id.colorPick2 to 0xFFFFFFFF.toInt(),
+            R.id.colorPick3 to 0xFFFF0000.toInt(),
+            R.id.colorPick4 to 0xFF00FF00.toInt(),
+            R.id.colorPick5 to 0xFF0000FF.toInt(),
+            R.id.colorPick6 to 0xFFFFFF00.toInt(),
+            R.id.colorPick7 to 0xFFFF00FF.toInt(),
+            R.id.colorPick8 to 0xFF00FFFF.toInt(),
+            R.id.colorPick9 to 0xFFFF8000.toInt()
         )
         
-        for ((viewId, color) in presetColors) {
-            view.findViewById<View>(viewId).setOnClickListener {
+        for ((viewId, color) in pickerColors) {
+            colorPickerPage?.findViewById<View>(viewId)?.setOnClickListener {
                 selectColor(color)
+                // Auto close after selection
+                colorPickerPage.visibility = View.GONE
+                toolbar?.visibility = View.VISIBLE
             }
         }
         
-        // Rainbow gradient slider for custom color
-        val colorPicker = view.findViewById<View>(R.id.colorPickerGradient)
-        colorPicker.setOnTouchListener { v, event ->
+        // Rainbow slider for any color
+        colorPickerPage?.findViewById<View>(R.id.rainbowSlider)?.setOnTouchListener { v, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
                     val ratio = (event.x.coerceIn(0f, v.width.toFloat()) / v.width)
