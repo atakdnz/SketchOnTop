@@ -10,10 +10,4 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- Hover detector - on top, always receives hover events -->
-    <com.sketchontop.HoverDetectorView
-        android:id="@+id/hoverDetector"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent" />
-
 </FrameLayout>

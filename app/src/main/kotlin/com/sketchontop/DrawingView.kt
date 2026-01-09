@@ -91,6 +91,9 @@ class DrawingView @JvmOverloads constructor(
     /** S Pen only mode: fingers pass through, only stylus can draw */
     var sPenOnlyMode: Boolean = false
     
+    /** Callback when finger touch is detected in S Pen mode - used for dynamic FLAG toggle */
+    var onFingerTouchDetected: (() -> Unit)? = null
+    
     /** Track if a stylus has ever been detected on this device */
     private var stylusDetected: Boolean = false
     
@@ -237,6 +240,10 @@ class DrawingView @JvmOverloads constructor(
         
         // S Pen only mode: allow stylus to draw, fingers pass through
         if (sPenOnlyMode && isFinger) {
+            // Notify on ACTION_DOWN so OverlayService can toggle FLAG_NOT_TOUCHABLE
+            if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                onFingerTouchDetected?.invoke()
+            }
             return false  // Finger touches pass through to use the phone
         }
         
