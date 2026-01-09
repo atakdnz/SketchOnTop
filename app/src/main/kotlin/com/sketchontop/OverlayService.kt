@@ -25,15 +25,18 @@ import androidx.core.app.NotificationCompat
 
 /**
  * Foreground Service that creates a system overlay for drawing.
- * This allows drawing on top of other apps while keeping the OS usable.
+ * Uses two separate windows: canvas (can be non-touchable) and toolbar (always touchable).
  */
 class OverlayService : Service() {
 
     private lateinit var windowManager: WindowManager
-    private var overlayView: View? = null
-    private var drawingView: DrawingView? = null
     
-    // UI elements
+    // Separate windows for canvas and toolbar
+    private var canvasView: View? = null
+    private var toolbarView: View? = null
+    private var canvasParams: WindowManager.LayoutParams? = null
+    
+    private var drawingView: DrawingView? = null
     private var toolbar: LinearLayout? = null
     private var btnExpand: ImageButton? = null
     
@@ -75,9 +78,6 @@ class OverlayService : Service() {
         removeOverlay()
     }
 
-    /**
-     * Creates the notification channel for the foreground service.
-     */
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -87,15 +87,11 @@ class OverlayService : Service() {
             ).apply {
                 description = "Shows when screen annotation is active"
             }
-            
             val notificationManager = getSystemService(NotificationManager::class.java)
             notificationManager.createNotificationChannel(channel)
         }
     }
 
-    /**
-     * Creates the foreground notification.
-     */
     private fun createNotification(): Notification {
         val stopIntent = Intent(this, OverlayService::class.java).apply {
             action = ACTION_STOP
@@ -122,32 +118,46 @@ class OverlayService : Service() {
     }
 
     /**
-     * Creates the overlay window with drawing view and toolbar.
+     * Creates TWO overlay windows: one for canvas, one for toolbar.
      */
     private fun createOverlay() {
-        // Use theme context for proper vector drawable inflation
         val themedContext = android.view.ContextThemeWrapper(this, R.style.Theme_SketchOnTop)
         val inflater = LayoutInflater.from(themedContext)
-        overlayView = inflater.inflate(R.layout.overlay_layout, null)
         
-        // Setup the window parameters
-        val params = WindowManager.LayoutParams(
+        val windowType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        else
+            @Suppress("DEPRECATION")
+            WindowManager.LayoutParams.TYPE_PHONE
+        
+        // === Canvas Window (full screen, can be made non-touchable) ===
+        canvasView = inflater.inflate(R.layout.overlay_canvas, null)
+        canvasParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            else
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_PHONE,
-            // Make it touchable but not focusable
+            windowType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
-        )
-        params.gravity = Gravity.TOP or Gravity.START
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+        }
+        windowManager.addView(canvasView, canvasParams)
         
-        // Add the overlay to window manager
-        windowManager.addView(overlayView, params)
+        // === Toolbar Window (wrap content, always touchable) ===
+        toolbarView = inflater.inflate(R.layout.overlay_toolbar, null)
+        val toolbarParams = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            windowType,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.END
+            x = 16
+            y = 48
+        }
+        windowManager.addView(toolbarView, toolbarParams)
         
         // Initialize views
         initViews()
@@ -158,37 +168,26 @@ class OverlayService : Service() {
         selectTool(DrawingView.Tool.PEN)
     }
 
-    /**
-     * Removes the overlay from the window manager.
-     */
     private fun removeOverlay() {
-        overlayView?.let {
-            try {
-                windowManager.removeView(it)
-            } catch (e: Exception) {
-                // View might already be removed
-            }
+        canvasView?.let {
+            try { windowManager.removeView(it) } catch (e: Exception) {}
         }
-        overlayView = null
+        toolbarView?.let {
+            try { windowManager.removeView(it) } catch (e: Exception) {}
+        }
+        canvasView = null
+        toolbarView = null
         drawingView = null
     }
 
-    /**
-     * Initialize all view references.
-     */
     private fun initViews() {
-        overlayView?.let { view ->
-            drawingView = view.findViewById(R.id.drawingView)
-            toolbar = view.findViewById(R.id.toolbar)
-            btnExpand = view.findViewById(R.id.btnExpand)
-        }
+        drawingView = canvasView?.findViewById(R.id.drawingView)
+        toolbar = toolbarView?.findViewById(R.id.toolbar)
+        btnExpand = toolbarView?.findViewById(R.id.btnExpand)
     }
 
-    /**
-     * Sets up toolbar button click listeners.
-     */
     private fun setupToolbar() {
-        overlayView?.let { view ->
+        toolbarView?.let { view ->
             // Tool buttons
             view.findViewById<ImageButton>(R.id.btnPen).setOnClickListener { 
                 selectTool(DrawingView.Tool.PEN) 
@@ -218,7 +217,7 @@ class OverlayService : Service() {
             btnExpand?.setOnClickListener { expandToolbar() }
             
             view.findViewById<ImageButton>(R.id.btnToggleVisibility).setOnClickListener { 
-                toggleDrawingsVisibility(view) 
+                toggleDrawingsVisibility() 
             }
             view.findViewById<ImageButton>(R.id.btnUndo).setOnClickListener { 
                 drawingView?.undo() 
@@ -240,8 +239,7 @@ class OverlayService : Service() {
             view.findViewById<SeekBar>(R.id.strokeWidthSeekBar).setOnSeekBarChangeListener(
                 object : SeekBar.OnSeekBarChangeListener {
                     override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                        val width = (progress + 2).toFloat()
-                        drawingView?.setStrokeWidth(width)
+                        drawingView?.setStrokeWidth((progress + 2).toFloat())
                     }
                     override fun onStartTrackingTouch(seekBar: SeekBar?) {}
                     override fun onStopTrackingTouch(seekBar: SeekBar?) {}
@@ -250,9 +248,6 @@ class OverlayService : Service() {
         }
     }
 
-    /**
-     * Sets up the color picker touch handling.
-     */
     private fun setupColorPicker(view: View) {
         val colorPicker = view.findViewById<View>(R.id.colorPickerGradient)
         val colorIndicator = view.findViewById<View>(R.id.currentColorIndicator)
@@ -260,10 +255,8 @@ class OverlayService : Service() {
         colorPicker.setOnTouchListener { v, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
-                    val width = v.width.toFloat()
-                    val ratio = (event.x.coerceIn(0f, width) / width)
-                    val hue = ratio * 360f
-                    val color = Color.HSVToColor(floatArrayOf(hue, 1f, 1f))
+                    val ratio = (event.x.coerceIn(0f, v.width.toFloat()) / v.width)
+                    val color = Color.HSVToColor(floatArrayOf(ratio * 360f, 1f, 1f))
                     
                     currentColor = color
                     drawingView?.setColor(color)
@@ -279,11 +272,8 @@ class OverlayService : Service() {
         }
     }
 
-    /**
-     * Sets up gradient preset buttons.
-     */
     private fun setupGradientPresets() {
-        overlayView?.let { view ->
+        toolbarView?.let { view ->
             val container = view.findViewById<LinearLayout>(R.id.gradientPresets)
             val presets = DrawingView.GradientPreset.values().filter { 
                 it != DrawingView.GradientPreset.CUSTOM 
@@ -291,17 +281,12 @@ class OverlayService : Service() {
             
             for (preset in presets) {
                 val button = View(this).apply {
-                    layoutParams = LinearLayout.LayoutParams(48, 24).apply {
-                        marginEnd = 4
-                    }
+                    layoutParams = LinearLayout.LayoutParams(48, 24).apply { marginEnd = 4 }
                     background = GradientDrawable(
                         GradientDrawable.Orientation.LEFT_RIGHT,
                         preset.colors
                     ).apply { cornerRadius = 4f }
-                    
-                    setOnClickListener {
-                        drawingView?.currentGradient = preset
-                    }
+                    setOnClickListener { drawingView?.currentGradient = preset }
                 }
                 container.addView(button)
             }
@@ -309,121 +294,94 @@ class OverlayService : Service() {
     }
 
     /**
-     * Toggles draw mode and updates window flags for touch passthrough.
+     * Toggles draw mode. When OFF, the canvas window becomes non-touchable.
      */
     private fun toggleDrawMode() {
         isDrawModeEnabled = !isDrawModeEnabled
         drawingView?.drawingEnabled = isDrawModeEnabled
         
-        // Update window flags for touch passthrough
-        updateWindowFlags()
+        // Update CANVAS window flags (not toolbar!)
+        canvasView?.let { view ->
+            canvasParams?.let { params ->
+                if (!isDrawModeEnabled && !isSPenModeEnabled) {
+                    // Make canvas pass-through
+                    params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                } else {
+                    // Canvas receives touches
+                    params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+                }
+                windowManager.updateViewLayout(view, params)
+            }
+        }
         
-        // Update button color
-        overlayView?.findViewById<ImageButton>(R.id.btnDrawMode)?.let { btn ->
-            val tint = if (isDrawModeEnabled) 0xFF4CAF50.toInt() else 0xFF888888.toInt()
-            btn.setColorFilter(tint)
+        // Update button tint
+        toolbarView?.findViewById<ImageButton>(R.id.btnDrawMode)?.let { btn ->
+            btn.setColorFilter(if (isDrawModeEnabled) 0xFF4CAF50.toInt() else 0xFF888888.toInt())
         }
     }
 
-    /**
-     * Toggles S Pen only mode.
-     */
     private fun toggleSPenMode() {
         isSPenModeEnabled = !isSPenModeEnabled
         drawingView?.sPenOnlyMode = isSPenModeEnabled
         
-        // Update window flags
-        updateWindowFlags()
-        
-        overlayView?.findViewById<ImageButton>(R.id.btnSPenMode)?.let { btn ->
-            val tint = if (isSPenModeEnabled) 0xFF2196F3.toInt() else 0xFFFFFFFF.toInt()
-            btn.setColorFilter(tint)
-        }
-    }
-
-    /**
-     * Updates window flags based on current mode.
-     * When draw mode is off (and S Pen mode is off), touches pass through.
-     */
-    private fun updateWindowFlags() {
-        overlayView?.let { view ->
-            val params = view.layoutParams as WindowManager.LayoutParams
-            
-            if (!isDrawModeEnabled && !isSPenModeEnabled) {
-                // Pass all touches through to underlying apps
-                params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-            } else {
-                // Receive touches
-                params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+        // Also update canvas flags
+        canvasView?.let { view ->
+            canvasParams?.let { params ->
+                if (!isDrawModeEnabled && !isSPenModeEnabled) {
+                    params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                } else {
+                    params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+                }
+                windowManager.updateViewLayout(view, params)
             }
-            
-            windowManager.updateViewLayout(view, params)
+        }
+        
+        toolbarView?.findViewById<ImageButton>(R.id.btnSPenMode)?.let { btn ->
+            btn.setColorFilter(if (isSPenModeEnabled) 0xFF2196F3.toInt() else 0xFFFFFFFF.toInt())
         }
     }
 
-    /**
-     * Toggles gradient brush mode.
-     */
     private fun toggleGradientMode() {
         isGradientModeEnabled = !isGradientModeEnabled
         drawingView?.gradientBrushEnabled = isGradientModeEnabled
         
-        overlayView?.let { view ->
-            view.findViewById<ImageButton>(R.id.btnGradientMode)?.let { btn ->
-                val tint = if (isGradientModeEnabled) 0xFFFF9800.toInt() else 0xFFFFFFFF.toInt()
-                btn.setColorFilter(tint)
-            }
-            
+        toolbarView?.let { view ->
+            view.findViewById<ImageButton>(R.id.btnGradientMode)?.setColorFilter(
+                if (isGradientModeEnabled) 0xFFFF9800.toInt() else 0xFFFFFFFF.toInt()
+            )
             view.findViewById<HorizontalScrollView>(R.id.gradientPresetsContainer)?.visibility = 
                 if (isGradientModeEnabled) View.VISIBLE else View.GONE
         }
     }
 
-    /**
-     * Selects a drawing tool.
-     */
     private fun selectTool(tool: DrawingView.Tool) {
         drawingView?.setTool(tool)
         
-        overlayView?.let { view ->
-            view.findViewById<ImageButton>(R.id.btnPen).isSelected = 
-                (tool == DrawingView.Tool.PEN)
-            view.findViewById<ImageButton>(R.id.btnHighlighter).isSelected = 
-                (tool == DrawingView.Tool.HIGHLIGHTER)
-            view.findViewById<ImageButton>(R.id.btnEraser).isSelected = 
-                (tool == DrawingView.Tool.ERASER)
+        toolbarView?.let { view ->
+            view.findViewById<ImageButton>(R.id.btnPen).isSelected = (tool == DrawingView.Tool.PEN)
+            view.findViewById<ImageButton>(R.id.btnHighlighter).isSelected = (tool == DrawingView.Tool.HIGHLIGHTER)
+            view.findViewById<ImageButton>(R.id.btnEraser).isSelected = (tool == DrawingView.Tool.ERASER)
             
-            // Update seek bar
             val width = drawingView?.getStrokeWidth() ?: 10f
-            view.findViewById<SeekBar>(R.id.strokeWidthSeekBar).progress = 
-                (width - 2).toInt().coerceIn(0, 50)
+            view.findViewById<SeekBar>(R.id.strokeWidthSeekBar).progress = (width - 2).toInt().coerceIn(0, 50)
         }
     }
 
-    /**
-     * Minimizes the toolbar.
-     */
     private fun minimizeToolbar() {
         isToolbarExpanded = false
         toolbar?.visibility = View.GONE
         btnExpand?.visibility = View.VISIBLE
     }
 
-    /**
-     * Expands the toolbar.
-     */
     private fun expandToolbar() {
         isToolbarExpanded = true
         toolbar?.visibility = View.VISIBLE
         btnExpand?.visibility = View.GONE
     }
 
-    /**
-     * Toggles drawing visibility.
-     */
-    private fun toggleDrawingsVisibility(view: View) {
+    private fun toggleDrawingsVisibility() {
         val isVisible = drawingView?.toggleDrawingsVisibility() ?: true
         val iconRes = if (isVisible) R.drawable.ic_visibility else R.drawable.ic_visibility_off
-        view.findViewById<ImageButton>(R.id.btnToggleVisibility).setImageResource(iconRes)
+        toolbarView?.findViewById<ImageButton>(R.id.btnToggleVisibility)?.setImageResource(iconRes)
     }
 }
