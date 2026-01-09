@@ -365,12 +365,13 @@ class OverlayService : Service() {
         
         // Update canvas touchability
         if (!isDrawModeEnabled) {
+            // Draw mode OFF: canvas non-touchable (everything passes through)
             setCanvasTouchable(false)
-        } else if (!isSPenModeEnabled) {
+        } else {
+            // Draw mode ON: canvas must be touchable to receive input
+            // (S Pen mode will handle finger passthrough dynamically)
             setCanvasTouchable(true)
         }
-        // If S Pen mode is on and draw mode turns on, canvas stays touchable
-        // to detect tool type
         
         // Update button tint
         toolbarView?.findViewById<ImageButton>(R.id.btnDrawMode)?.let { btn ->
