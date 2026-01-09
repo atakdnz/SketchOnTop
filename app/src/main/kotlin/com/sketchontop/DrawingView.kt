@@ -72,7 +72,7 @@ class DrawingView @JvmOverloads constructor(
         Tool.ERASER to 30f
     )
     
-    /** Current drawing color */
+    /** Current drawing color (solid color) */
     private var currentColor: Int = Color.BLACK
     
     /** Alpha value for highlighter (0-255) */
@@ -81,8 +81,15 @@ class DrawingView @JvmOverloads constructor(
     /** Whether drawings are currently visible */
     private var drawingsVisible: Boolean = true
     
-    /** Whether to ignore finger input when stylus is preferred */
-    var stylusOnlyMode: Boolean = false
+    // ================================
+    // Drawing Mode Controls
+    // ================================
+    
+    /** Whether drawing is enabled (false = touches pass through to phone) */
+    var drawingEnabled: Boolean = true
+    
+    /** S Pen only mode: fingers pass through, only stylus can draw */
+    var sPenOnlyMode: Boolean = false
     
     /** Track if a stylus has ever been detected on this device */
     private var stylusDetected: Boolean = false
@@ -92,6 +99,37 @@ class DrawingView @JvmOverloads constructor(
     
     /** Store the tool before temporary eraser mode was activated */
     private var toolBeforeTemporaryEraser: Tool = Tool.PEN
+    
+    // ================================
+    // Gradient Brush System
+    // ================================
+    
+    /** Whether to use gradient brush instead of solid color */
+    var gradientBrushEnabled: Boolean = false
+    
+    /** Currently selected gradient preset */
+    var currentGradient: GradientPreset = GradientPreset.RAINBOW
+    
+    /** Custom gradient colors (for custom mode) */
+    var customGradientColors: IntArray = intArrayOf(Color.RED, Color.BLUE)
+    
+    /** Gradient presets */
+    enum class GradientPreset(val colors: IntArray, val displayName: String) {
+        RAINBOW(intArrayOf(0xFFFF0000.toInt(), 0xFFFF7F00.toInt(), 0xFFFFFF00.toInt(), 
+                          0xFF00FF00.toInt(), 0xFF0000FF.toInt(), 0xFF8B00FF.toInt()), "Rainbow"),
+        FIRE(intArrayOf(0xFFFFFF00.toInt(), 0xFFFF7F00.toInt(), 0xFFFF0000.toInt()), "Fire"),
+        OCEAN(intArrayOf(0xFF00FFFF.toInt(), 0xFF0080FF.toInt(), 0xFF0000FF.toInt()), "Ocean"),
+        SUNSET(intArrayOf(0xFFFF6B6B.toInt(), 0xFFFFE66D.toInt(), 0xFFFF8E53.toInt()), "Sunset"),
+        FOREST(intArrayOf(0xFF2D5016.toInt(), 0xFF4A7C23.toInt(), 0xFF8BC34A.toInt()), "Forest"),
+        NEON(intArrayOf(0xFFFF00FF.toInt(), 0xFF00FFFF.toInt(), 0xFFFF00FF.toInt()), "Neon"),
+        CUSTOM(intArrayOf(Color.RED, Color.BLUE), "Custom")
+    }
+    
+    /** Distance traveled for gradient color cycling */
+    private var gradientDistance: Float = 0f
+    
+    /** Gradient cycle length in pixels */
+    private val gradientCycleLength: Float = 200f
 
     // ================================
     // Touch Tracking
@@ -179,14 +217,27 @@ class DrawingView @JvmOverloads constructor(
         // Check if this is a stylus input
         val isStylus = toolType == MotionEvent.TOOL_TYPE_STYLUS
         val isStylusEraser = toolType == MotionEvent.TOOL_TYPE_ERASER
+        val isFinger = toolType == MotionEvent.TOOL_TYPE_FINGER
         
         if (isStylus || isStylusEraser) {
             stylusDetected = true
         }
         
-        // If stylus-only mode is enabled and this is not a stylus, ignore
-        if (stylusOnlyMode && stylusDetected && !isStylus && !isStylusEraser) {
-            return false
+        // --------------------------------
+        // Drawing Mode Checks
+        // --------------------------------
+        
+        // If drawing is completely disabled, pass all touches through
+        if (!drawingEnabled) {
+            // Exception: if sPenOnlyMode is on and this is a stylus, still allow drawing
+            if (!(sPenOnlyMode && (isStylus || isStylusEraser))) {
+                return false  // Pass through to underlying app
+            }
+        }
+        
+        // S Pen only mode: allow stylus to draw, fingers pass through
+        if (sPenOnlyMode && isFinger) {
+            return false  // Finger touches pass through to use the phone
         }
         
         // --------------------------------
@@ -291,6 +342,9 @@ class DrawingView @JvmOverloads constructor(
         // Clear redo stack when a new stroke is started
         redoStack.clear()
         
+        // Reset gradient distance for new stroke
+        gradientDistance = 0f
+        
         // Create a new path
         currentPath = Path().apply {
             moveTo(x, y)
@@ -309,9 +363,25 @@ class DrawingView @JvmOverloads constructor(
     /**
      * Continues the current stroke to the given coordinates.
      * Uses quadratic bezier curves for smooth lines.
+     * Also updates gradient color if gradient brush is enabled.
      */
     private fun continueStroke(x: Float, y: Float) {
         currentPath?.let { path ->
+            // Calculate distance traveled
+            val dx = x - lastX
+            val dy = y - lastY
+            val distance = kotlin.math.sqrt(dx * dx + dy * dy)
+            gradientDistance += distance
+            
+            // Update gradient color if enabled and not eraser
+            if (gradientBrushEnabled && currentTool != Tool.ERASER) {
+                val gradientColor = getGradientColorAtDistance(gradientDistance)
+                currentPaint.color = gradientColor
+                if (currentTool == Tool.HIGHLIGHTER) {
+                    currentPaint.alpha = highlighterAlpha
+                }
+            }
+            
             // Use quadratic bezier for smoother curves
             // The control point is the midpoint between last and current position
             val midX = (lastX + x) / 2
@@ -321,6 +391,53 @@ class DrawingView @JvmOverloads constructor(
             lastX = x
             lastY = y
         }
+    }
+    
+    /**
+     * Gets the gradient color at a given distance along the stroke.
+     */
+    private fun getGradientColorAtDistance(distance: Float): Int {
+        val colors = if (currentGradient == GradientPreset.CUSTOM) {
+            customGradientColors
+        } else {
+            currentGradient.colors
+        }
+        
+        if (colors.size < 2) return colors.firstOrNull() ?: currentColor
+        
+        // Calculate position in gradient cycle (0 to 1)
+        val cyclePosition = (distance / gradientCycleLength) % 1f
+        
+        // Find which two colors to interpolate between
+        val scaledPosition = cyclePosition * (colors.size - 1)
+        val index1 = scaledPosition.toInt().coerceIn(0, colors.size - 2)
+        val index2 = index1 + 1
+        val fraction = scaledPosition - index1
+        
+        // Interpolate between colors
+        return interpolateColor(colors[index1], colors[index2], fraction)
+    }
+    
+    /**
+     * Interpolates between two colors.
+     */
+    private fun interpolateColor(color1: Int, color2: Int, fraction: Float): Int {
+        val a1 = Color.alpha(color1)
+        val r1 = Color.red(color1)
+        val g1 = Color.green(color1)
+        val b1 = Color.blue(color1)
+        
+        val a2 = Color.alpha(color2)
+        val r2 = Color.red(color2)
+        val g2 = Color.green(color2)
+        val b2 = Color.blue(color2)
+        
+        val a = (a1 + (a2 - a1) * fraction).toInt()
+        val r = (r1 + (r2 - r1) * fraction).toInt()
+        val g = (g1 + (g2 - g1) * fraction).toInt()
+        val b = (b1 + (b2 - b1) * fraction).toInt()
+        
+        return Color.argb(a, r, g, b)
     }
     
     /**
