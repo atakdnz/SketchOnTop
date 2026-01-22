@@ -69,7 +69,7 @@ class OverlayService : Service() {
         const val ACTION_STOP = "com.sketchontop.STOP"
         // Time to keep canvas non-touchable after finger touch
         // Long enough for user interaction, then resets for stylus
-        const val CANVAS_RESET_DELAY_MS = 2000L
+        const val CANVAS_RESET_DELAY_MS = 5000L
     }
 
     override fun onCreate() {

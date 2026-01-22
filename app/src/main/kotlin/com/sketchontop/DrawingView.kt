@@ -181,13 +181,11 @@ class DrawingView @JvmOverloads constructor(
         // Only draw if visibility is enabled
         if (!drawingsVisible) return
         
-        // Draw the off-screen bitmap (contains all completed strokes)
+        // Draw the off-screen bitmap (contains all strokes including in-progress segments)
         bitmap?.let { canvas.drawBitmap(it, 0f, 0f, bitmapPaint) }
         
-        // Draw the current in-progress stroke
-        currentPath?.let { path ->
-            canvas.drawPath(path, currentPaint)
-        }
+        // Note: In-progress strokes are drawn directly to bitmap in continueStroke()
+        // so we don't need to draw currentPath here
     }
     
     /**
@@ -389,15 +387,18 @@ class DrawingView @JvmOverloads constructor(
                 }
             }
             
-            // Use quadratic bezier for smoother curves
-            // The control point is the midpoint between last and current position
-            val midX = (lastX + x) / 2
-            val midY = (lastY + y) / 2
-            path.quadTo(lastX, lastY, midX, midY)
+            // Draw this segment IMMEDIATELY to the bitmap
+            // This preserves the current pressure/width and color
+            bitmapCanvas?.drawLine(lastX, lastY, x, y, currentPaint)
+            
+            // Also add to path for undo tracking (though we won't redraw with path)
+            path.lineTo(x, y)
             
             lastX = x
             lastY = y
         }
+        
+        invalidate()
     }
     
     /**
@@ -449,23 +450,25 @@ class DrawingView @JvmOverloads constructor(
     
     /**
      * Finishes the current stroke and adds it to the stroke list.
+     * Note: Segments are already drawn to bitmap in continueStroke().
      */
     private fun finishStroke() {
         currentPath?.let { path ->
             // Add final line to last position
             path.lineTo(lastX, lastY)
             
-            // Create stroke with paint copy
+            // Create stroke with paint copy for undo tracking
+            // Note: After undo/redo, pressure-sensitive strokes will be redrawn
+            // with uniform width (known limitation)
             val stroke = Stroke(
-                path = Path(path),  // Create a copy of the path
+                path = Path(path),
                 paint = Stroke.createPaintCopy(currentPaint)
             )
             
             // Add to stroke list
             strokes.add(stroke)
             
-            // Draw to off-screen bitmap
-            bitmapCanvas?.drawPath(path, currentPaint)
+            // Don't draw here - already drawn in continueStroke()
         }
         
         // Reset current path

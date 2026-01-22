@@ -23,21 +23,17 @@ Last updated: 2026-01-09
 ### 1. Brush Preview Size Mismatch
 - **Issue**: The brush preview circle in the toolbar doesn't match the actual drawing size
 - **Location**: `OverlayService.kt` → `updateBrushPreview()`
-- **Current behavior**: Preview size is clamped between 6dp-36dp and uses raw strokeWidth as pixels
 - **Expected**: Should scale proportionally to match actual stroke appearance
 
-### 2. Gradient Drawing (Not Implemented)
-- **Goal**: Path-based repeating rainbow gradient that follows the stroke
-- **Current state**: Gradient mode exists but draws single color (color changes between strokes, not within)
-- **Implementation needed**: 
-  - Store gradient strokes as multiple small segments with different colors
-  - Or use shader-based approach with path-following gradient
-- **User preference**: Path-based (color based on distance drawn), repeating rainbow
-- **Location**: `DrawingView.kt` → gradient-related code around lines 100-135
+### 2. Undo/Redo Loses Pressure Variation
+- **Issue**: When you undo/redo a pressure-sensitive stroke, it redraws with uniform width
+- **Cause**: Strokes are stored as single Path+Paint, not per-segment data
+- **Fix needed**: Store segments with individual stroke widths for accurate undo/redo
+- **Location**: `DrawingView.kt` → `Stroke` model and `redrawAllStrokes()`
 
 ### 3. Custom Gradient Creator
 - **Goal**: Let users create custom gradients
-- **Status**: Not started - do after gradient drawing works
+- **Status**: Not started
 
 ## Architecture
 
@@ -55,7 +51,7 @@ Last updated: 2026-01-09
 
 ### S Pen Mode Implementation
 - Uses dynamic `FLAG_NOT_TOUCHABLE` toggle
-- When finger detected in S Pen mode → canvas becomes non-touchable for 2 seconds
+- When finger detected in S Pen mode → canvas becomes non-touchable for 5 seconds
 - Allows subsequent finger touches to pass through to OS
 
 ## GitHub
