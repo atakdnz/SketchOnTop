@@ -42,6 +42,13 @@ class OverlayService : Service() {
     private var canvasView: View? = null
     private var toolbarView: View? = null
     private var canvasParams: WindowManager.LayoutParams? = null
+    private var toolbarParams: WindowManager.LayoutParams? = null
+    
+    // Drag tracking for movable toolbar
+    private var initialX: Int = 0
+    private var initialY: Int = 0
+    private var initialTouchX: Float = 0f
+    private var initialTouchY: Float = 0f
     
     private var drawingView: DrawingView? = null
     private var toolbar: LinearLayout? = null
@@ -166,15 +173,20 @@ class OverlayService : Service() {
         
         // === Toolbar Window (wrap content, always touchable) ===
         toolbarView = inflater.inflate(R.layout.overlay_toolbar, null)
-        val toolbarParams = WindowManager.LayoutParams(
+        
+        // Get display width for top-right positioning
+        val displayMetrics = resources.displayMetrics
+        val displayWidth = displayMetrics.widthPixels
+        
+        toolbarParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             windowType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.TOP or Gravity.END
-            x = 16
+            gravity = Gravity.TOP or Gravity.START
+            x = displayWidth - 150  // Start on right side (approximate toolbar width)
             y = 48
         }
         windowManager.addView(toolbarView, toolbarParams)
@@ -187,6 +199,9 @@ class OverlayService : Service() {
         
         // Set default tool
         selectTool(DrawingView.Tool.PEN)
+        
+        // Enable toolbar dragging
+        setupToolbarDrag()
     }
 
     private fun removeOverlay() {
@@ -222,6 +237,37 @@ class OverlayService : Service() {
                 // This allows the next stylus input to be detected
                 handler.removeCallbacks(resetCanvasRunnable)
                 handler.postDelayed(resetCanvasRunnable, CANVAS_RESET_DELAY_MS)
+            }
+        }
+    }
+    
+    /**
+     * Sets up drag functionality for the toolbar.
+     * User can drag from any part of the toolbar background.
+     */
+    private fun setupToolbarDrag() {
+        toolbarView?.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    toolbarParams?.let { params ->
+                        initialX = params.x
+                        initialY = params.y
+                    }
+                    initialTouchX = event.rawX
+                    initialTouchY = event.rawY
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    toolbarParams?.let { params ->
+                        params.x = initialX + (event.rawX - initialTouchX).toInt()
+                        params.y = initialY + (event.rawY - initialTouchY).toInt()
+                        try {
+                            windowManager.updateViewLayout(toolbarView, params)
+                        } catch (e: Exception) {}
+                    }
+                    true
+                }
+                else -> false
             }
         }
     }
