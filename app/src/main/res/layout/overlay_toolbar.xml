@@ -332,6 +332,41 @@
             android:layout_gravity="center_horizontal"
             android:background="@drawable/gradient_color_picker" />
 
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginVertical="4dp"
+            android:background="#40FFFFFF" />
+
+        <!-- Gradient Presets Label -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Gradients"
+            android:textColor="@color/white"
+            android:textSize="12sp"
+            android:layout_marginBottom="4dp" />
+
+        <!-- Gradient Preset Row 1 -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <View android:id="@+id/gradientRainbow" android:layout_width="36dp" android:layout_height="24dp" android:layout_margin="2dp" android:background="@drawable/gradient_rainbow" />
+            <View android:id="@+id/gradientFire" android:layout_width="36dp" android:layout_height="24dp" android:layout_margin="2dp" android:background="@drawable/gradient_fire" />
+            <View android:id="@+id/gradientOcean" android:layout_width="36dp" android:layout_height="24dp" android:layout_margin="2dp" android:background="@drawable/gradient_ocean" />
+        </LinearLayout>
+
+        <!-- Gradient Preset Row 2 -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <View android:id="@+id/gradientSunset" android:layout_width="36dp" android:layout_height="24dp" android:layout_margin="2dp" android:background="@drawable/gradient_sunset" />
+            <View android:id="@+id/gradientForest" android:layout_width="36dp" android:layout_height="24dp" android:layout_margin="2dp" android:background="@drawable/gradient_forest" />
+            <View android:id="@+id/gradientNeon" android:layout_width="36dp" android:layout_height="24dp" android:layout_margin="2dp" android:background="@drawable/gradient_neon" />
+        </LinearLayout>
+
     </LinearLayout>
 
 </FrameLayout>

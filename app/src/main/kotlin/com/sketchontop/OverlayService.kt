@@ -364,6 +364,33 @@ class OverlayService : Service() {
             }
         }
         
+        // Gradient preset click handlers
+        val gradientPresets = mapOf(
+            R.id.gradientRainbow to DrawingView.GradientPreset.RAINBOW,
+            R.id.gradientFire to DrawingView.GradientPreset.FIRE,
+            R.id.gradientOcean to DrawingView.GradientPreset.OCEAN,
+            R.id.gradientSunset to DrawingView.GradientPreset.SUNSET,
+            R.id.gradientForest to DrawingView.GradientPreset.FOREST,
+            R.id.gradientNeon to DrawingView.GradientPreset.NEON
+        )
+        
+        for ((viewId, preset) in gradientPresets) {
+            colorPickerPage?.findViewById<View>(viewId)?.setOnClickListener {
+                // Enable gradient mode and select preset
+                drawingView?.gradientBrushEnabled = true
+                drawingView?.currentGradient = preset
+                isGradientModeEnabled = true
+                
+                // Update gradient mode button tint
+                toolbarView?.findViewById<ImageButton>(R.id.btnGradientMode)?.imageTintList = 
+                    android.content.res.ColorStateList.valueOf(0xFF4CAF50.toInt())
+                
+                // Close color picker and return to toolbar
+                colorPickerPage?.visibility = View.GONE
+                toolbar?.visibility = View.VISIBLE
+            }
+        }
+        
         // Initial brush preview update
         updateBrushPreview()
     }

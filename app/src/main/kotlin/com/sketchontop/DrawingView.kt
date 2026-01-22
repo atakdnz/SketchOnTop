@@ -143,6 +143,19 @@ class DrawingView @JvmOverloads constructor(
     
     /** Last Y coordinate for smooth drawing */
     private var lastY: Float = 0f
+    
+    /** Current touch position for eraser preview */
+    private var currentTouchX: Float = 0f
+    private var currentTouchY: Float = 0f
+    private var isDrawing: Boolean = false
+    
+    /** Paint for eraser preview circle */
+    private val eraserPreviewPaint = Paint().apply {
+        isAntiAlias = true
+        style = Paint.Style.STROKE
+        strokeWidth = 2f
+        color = Color.WHITE
+    }
 
     // ================================
     // Initialization
@@ -184,8 +197,11 @@ class DrawingView @JvmOverloads constructor(
         // Draw the off-screen bitmap (contains all strokes including in-progress segments)
         bitmap?.let { canvas.drawBitmap(it, 0f, 0f, bitmapPaint) }
         
-        // Note: In-progress strokes are drawn directly to bitmap in continueStroke()
-        // so we don't need to draw currentPath here
+        // Draw eraser preview circle while erasing
+        if (isDrawing && currentTool == Tool.ERASER) {
+            val eraserRadius = (toolStrokeWidths[Tool.ERASER] ?: 30f) / 2
+            canvas.drawCircle(currentTouchX, currentTouchY, eraserRadius, eraserPreviewPaint)
+        }
     }
     
     /**
@@ -306,12 +322,21 @@ class DrawingView @JvmOverloads constructor(
                 // Request unbuffered dispatch for lower latency stylus input
                 requestUnbufferedDispatch(event)
                 
+                // Track drawing state and position
+                isDrawing = true
+                currentTouchX = x
+                currentTouchY = y
+                
                 // Start a new stroke
                 startStroke(x, y, dynamicWidth, effectiveTool)
                 return true
             }
             
             MotionEvent.ACTION_MOVE -> {
+                // Track current position for eraser preview
+                currentTouchX = x
+                currentTouchY = y
+                
                 // Process all historical points for smoother lines
                 val historySize = event.historySize
                 for (i in 0 until historySize) {
@@ -331,6 +356,9 @@ class DrawingView @JvmOverloads constructor(
             }
             
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                // Stop drawing
+                isDrawing = false
+                
                 // Finish the stroke
                 finishStroke()
                 return true
