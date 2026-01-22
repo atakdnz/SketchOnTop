@@ -6,6 +6,7 @@ import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
 import com.sketchontop.models.Stroke
+import com.sketchontop.models.StrokeSegment
 
 /**
  * Custom View for drawing on a transparent overlay.
@@ -47,8 +48,8 @@ class DrawingView @JvmOverloads constructor(
     /** Stack of undone strokes for redo functionality */
     private val redoStack = mutableListOf<Stroke>()
     
-    /** Currently in-progress stroke path */
-    private var currentPath: Path? = null
+    /** Currently in-progress stroke (collects segments) */
+    private var currentStroke: Stroke? = null
     
     /** Paint for the current stroke */
     private val currentPaint = Paint().apply {
@@ -218,15 +219,19 @@ class DrawingView @JvmOverloads constructor(
     /**
      * Redraws all strokes onto the off-screen bitmap.
      * Called after undo/redo or when bitmap is recreated.
+     * Now properly preserves per-segment width/color.
      */
     private fun redrawAllStrokes() {
         bitmapCanvas?.let { canvas ->
             // Clear the bitmap with transparent color
             canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
             
-            // Redraw all strokes
+            // Redraw all strokes segment by segment
             for (stroke in strokes) {
-                canvas.drawPath(stroke.path, stroke.paint)
+                for (segment in stroke.segments) {
+                    val paint = Stroke.createPaintForSegment(segment, stroke.isEraser)
+                    canvas.drawLine(segment.x1, segment.y1, segment.x2, segment.y2, paint)
+                }
             }
         }
     }
@@ -391,6 +396,7 @@ class DrawingView @JvmOverloads constructor(
     
     /**
      * Starts a new stroke at the given coordinates.
+     * Creates a new Stroke to collect segments.
      */
     private fun startStroke(x: Float, y: Float, strokeWidth: Float, tool: Tool) {
         // Clear redo stack when a new stroke is started
@@ -399,10 +405,11 @@ class DrawingView @JvmOverloads constructor(
         // Reset gradient distance for new stroke
         gradientDistance = 0f
         
-        // Create a new path
-        currentPath = Path().apply {
-            moveTo(x, y)
-        }
+        // Create a new stroke to collect segments
+        currentStroke = Stroke(
+            segments = mutableListOf(),
+            isEraser = (tool == Tool.ERASER)
+        )
         
         // Configure paint based on tool
         configurePaintForTool(tool, strokeWidth)
@@ -416,11 +423,10 @@ class DrawingView @JvmOverloads constructor(
     
     /**
      * Continues the current stroke to the given coordinates.
-     * Uses quadratic bezier curves for smooth lines.
-     * Also updates gradient color if gradient brush is enabled.
+     * Adds a segment with the current pressure/width and gradient color.
      */
     private fun continueStroke(x: Float, y: Float) {
-        currentPath?.let { path ->
+        currentStroke?.let { stroke ->
             // Calculate distance traveled
             val dx = x - lastX
             val dy = y - lastY
@@ -436,12 +442,22 @@ class DrawingView @JvmOverloads constructor(
                 }
             }
             
-            // Draw this segment IMMEDIATELY to the bitmap
-            // This preserves the current pressure/width and color
-            bitmapCanvas?.drawLine(lastX, lastY, x, y, currentPaint)
+            // Create a segment with current paint state
+            val segment = StrokeSegment(
+                x1 = lastX,
+                y1 = lastY,
+                x2 = x,
+                y2 = y,
+                color = currentPaint.color,
+                strokeWidth = currentPaint.strokeWidth,
+                alpha = currentPaint.alpha
+            )
             
-            // Also add to path for undo tracking (though we won't redraw with path)
-            path.lineTo(x, y)
+            // Add to current stroke's segments
+            stroke.segments.add(segment)
+            
+            // Draw this segment IMMEDIATELY to the bitmap
+            bitmapCanvas?.drawLine(lastX, lastY, x, y, currentPaint)
             
             lastX = x
             lastY = y
@@ -499,29 +515,18 @@ class DrawingView @JvmOverloads constructor(
     
     /**
      * Finishes the current stroke and adds it to the stroke list.
-     * Note: Segments are already drawn to bitmap in continueStroke().
+     * Segments are already collected in continueStroke() and drawn to bitmap.
      */
     private fun finishStroke() {
-        currentPath?.let { path ->
-            // Add final line to last position
-            path.lineTo(lastX, lastY)
-            
-            // Create stroke with paint copy for undo tracking
-            // Note: After undo/redo, pressure-sensitive strokes will be redrawn
-            // with uniform width (known limitation)
-            val stroke = Stroke(
-                path = Path(path),
-                paint = Stroke.createPaintCopy(currentPaint)
-            )
-            
-            // Add to stroke list
-            strokes.add(stroke)
-            
-            // Don't draw here - already drawn in continueStroke()
+        currentStroke?.let { stroke ->
+            // Only add if there are segments
+            if (stroke.segments.isNotEmpty()) {
+                strokes.add(stroke)
+            }
         }
         
-        // Reset current path
-        currentPath = null
+        // Reset current stroke
+        currentStroke = null
         
         invalidate()
     }
@@ -532,18 +537,33 @@ class DrawingView @JvmOverloads constructor(
      */
     private fun eraseStrokesAt(x: Float, y: Float, radius: Float) {
         val strokesToRemove = mutableListOf<Stroke>()
-        val bounds = RectF()
         
         for (stroke in strokes) {
-            stroke.path.computeBounds(bounds, true)
+            // Compute bounds from segments
+            if (stroke.segments.isEmpty()) continue
             
-            // Expand bounds by stroke width
-            val halfWidth = stroke.paint.strokeWidth / 2
-            bounds.inset(-halfWidth - radius, -halfWidth - radius)
+            var minX = Float.MAX_VALUE
+            var minY = Float.MAX_VALUE
+            var maxX = Float.MIN_VALUE
+            var maxY = Float.MIN_VALUE
+            var maxWidth = 0f
+            
+            for (segment in stroke.segments) {
+                minX = minOf(minX, segment.x1, segment.x2)
+                minY = minOf(minY, segment.y1, segment.y2)
+                maxX = maxOf(maxX, segment.x1, segment.x2)
+                maxY = maxOf(maxY, segment.y1, segment.y2)
+                maxWidth = maxOf(maxWidth, segment.strokeWidth)
+            }
+            
+            // Expand bounds by stroke width and eraser radius
+            val expanding = maxWidth / 2 + radius
+            val bounds = RectF(
+                minX - expanding, minY - expanding,
+                maxX + expanding, maxY + expanding
+            )
             
             if (bounds.contains(x, y)) {
-                // More precise check: compute distance to path
-                // For now, just use bounds check which is good enough
                 strokesToRemove.add(stroke)
             }
         }
@@ -658,7 +678,13 @@ class DrawingView @JvmOverloads constructor(
         if (redoStack.isNotEmpty()) {
             val stroke = redoStack.removeAt(redoStack.lastIndex)
             strokes.add(stroke)
-            bitmapCanvas?.drawPath(stroke.path, stroke.paint)
+            
+            // Draw stroke segments to bitmap
+            for (segment in stroke.segments) {
+                val paint = Stroke.createPaintForSegment(segment, stroke.isEraser)
+                bitmapCanvas?.drawLine(segment.x1, segment.y1, segment.x2, segment.y2, paint)
+            }
+            
             invalidate()
         }
     }
