@@ -25,6 +25,11 @@ class DrawingView @JvmOverloads constructor(
         HIGHLIGHTER,
         ERASER
     }
+    
+    enum class EraserMode {
+        PIXEL,  // Erase pixels where you touch
+        STROKE  // Erase entire strokes
+    }
 
     // ================================
     // Drawing State
@@ -156,6 +161,12 @@ class DrawingView @JvmOverloads constructor(
         strokeWidth = 2f
         color = Color.WHITE
     }
+    
+    /** Current eraser width (updated with pressure) */
+    private var currentEraserWidth: Float = 30f
+    
+    /** Eraser mode: PIXEL (default) or STROKE (erase whole strokes) */
+    var eraserMode: EraserMode = EraserMode.PIXEL
 
     // ================================
     // Initialization
@@ -198,8 +209,8 @@ class DrawingView @JvmOverloads constructor(
         bitmap?.let { canvas.drawBitmap(it, 0f, 0f, bitmapPaint) }
         
         // Draw eraser preview circle while erasing
-        if (isDrawing && currentTool == Tool.ERASER) {
-            val eraserRadius = (toolStrokeWidths[Tool.ERASER] ?: 30f) / 2
+        if (isDrawing && (currentTool == Tool.ERASER || temporaryEraserMode)) {
+            val eraserRadius = currentEraserWidth / 2
             canvas.drawCircle(currentTouchX, currentTouchY, eraserRadius, eraserPreviewPaint)
         }
     }
@@ -336,6 +347,16 @@ class DrawingView @JvmOverloads constructor(
                 // Track current position for eraser preview
                 currentTouchX = x
                 currentTouchY = y
+                
+                // Track current eraser width for preview
+                if (effectiveTool == Tool.ERASER) {
+                    currentEraserWidth = dynamicWidth
+                    
+                    // Stroke eraser mode: check if touching any stroke
+                    if (eraserMode == EraserMode.STROKE) {
+                        eraseStrokesAt(x, y, dynamicWidth / 2)
+                    }
+                }
                 
                 // Process all historical points for smoother lines
                 val historySize = event.historySize
@@ -503,6 +524,35 @@ class DrawingView @JvmOverloads constructor(
         currentPath = null
         
         invalidate()
+    }
+    
+    /**
+     * Erases strokes that are touched at the given point.
+     * Used for stroke eraser mode.
+     */
+    private fun eraseStrokesAt(x: Float, y: Float, radius: Float) {
+        val strokesToRemove = mutableListOf<Stroke>()
+        val bounds = RectF()
+        
+        for (stroke in strokes) {
+            stroke.path.computeBounds(bounds, true)
+            
+            // Expand bounds by stroke width
+            val halfWidth = stroke.paint.strokeWidth / 2
+            bounds.inset(-halfWidth - radius, -halfWidth - radius)
+            
+            if (bounds.contains(x, y)) {
+                // More precise check: compute distance to path
+                // For now, just use bounds check which is good enough
+                strokesToRemove.add(stroke)
+            }
+        }
+        
+        if (strokesToRemove.isNotEmpty()) {
+            strokes.removeAll(strokesToRemove)
+            redoStack.addAll(strokesToRemove)  // Allow redo
+            redrawAllStrokes()
+        }
     }
     
     /**

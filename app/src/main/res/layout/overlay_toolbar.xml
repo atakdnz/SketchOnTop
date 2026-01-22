@@ -369,4 +369,97 @@
 
     </LinearLayout>
 
+    <!-- Eraser Settings Page (hidden by default) -->
+    <LinearLayout
+        android:id="@+id/eraserPage"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/toolbar_background"
+        android:orientation="vertical"
+        android:padding="8dp"
+        android:visibility="gone">
+
+        <!-- Back Button -->
+        <ImageButton
+            android:id="@+id/btnEraserBack"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="@drawable/tool_button_background"
+            android:contentDescription="Back"
+            android:padding="6dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_close"
+            android:tint="@color/toolbar_icon_tint" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginVertical="4dp"
+            android:background="#40FFFFFF" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Eraser Mode"
+            android:textColor="@color/white"
+            android:textSize="12sp"
+            android:layout_marginBottom="8dp" />
+
+        <!-- Pixel Eraser Option -->
+        <LinearLayout
+            android:id="@+id/btnPixelEraser"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:padding="8dp"
+            android:background="@drawable/tool_button_background"
+            android:layout_marginBottom="4dp">
+
+            <View
+                android:id="@+id/pixelEraserIndicator"
+                android:layout_width="12dp"
+                android:layout_height="12dp"
+                android:background="@drawable/brush_preview_circle"
+                android:backgroundTint="#4CAF50" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Pixel Eraser"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:layout_marginStart="8dp" />
+
+        </LinearLayout>
+
+        <!-- Stroke Eraser Option -->
+        <LinearLayout
+            android:id="@+id/btnStrokeEraser"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:padding="8dp"
+            android:background="@drawable/tool_button_background">
+
+            <View
+                android:id="@+id/strokeEraserIndicator"
+                android:layout_width="12dp"
+                android:layout_height="12dp"
+                android:background="@drawable/brush_preview_circle"
+                android:backgroundTint="#888888" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Stroke Eraser"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:layout_marginStart="8dp" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
 </FrameLayout>

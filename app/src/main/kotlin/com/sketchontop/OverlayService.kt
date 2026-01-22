@@ -183,6 +183,7 @@ class OverlayService : Service() {
         initViews()
         setupDrawingViewCallbacks()
         setupToolbar()
+        setupEraserPage()
         
         // Set default tool
         selectTool(DrawingView.Tool.PEN)
@@ -258,7 +259,12 @@ class OverlayService : Service() {
                 selectTool(DrawingView.Tool.HIGHLIGHTER) 
             }
             view.findViewById<ImageButton>(R.id.btnEraser).setOnClickListener { 
-                selectTool(DrawingView.Tool.ERASER) 
+                if (drawingView?.getTool() == DrawingView.Tool.ERASER) {
+                    // Already in eraser mode, open eraser settings page
+                    openEraserPage()
+                } else {
+                    selectTool(DrawingView.Tool.ERASER)
+                }
             }
             
             // Mode toggles
@@ -491,6 +497,65 @@ class OverlayService : Service() {
         toolbarView?.findViewById<ImageButton>(R.id.btnSPenMode)?.let { btn ->
             btn.setColorFilter(if (isSPenModeEnabled) 0xFF2196F3.toInt() else 0xFFFFFFFF.toInt())
         }
+    }
+    
+    /**
+     * Opens the eraser settings page.
+     */
+    private fun openEraserPage() {
+        val eraserPage = toolbarView?.findViewById<View>(R.id.eraserPage) ?: return
+        
+        toolbar?.visibility = View.GONE
+        eraserPage.visibility = View.VISIBLE
+        
+        // Update indicators based on current mode
+        updateEraserModeIndicators()
+    }
+    
+    /**
+     * Sets up the eraser page click handlers.
+     */
+    private fun setupEraserPage() {
+        val eraserPage = toolbarView?.findViewById<View>(R.id.eraserPage) ?: return
+        
+        // Back button
+        eraserPage.findViewById<View>(R.id.btnEraserBack)?.setOnClickListener {
+            eraserPage.visibility = View.GONE
+            toolbar?.visibility = View.VISIBLE
+        }
+        
+        // Pixel eraser option
+        eraserPage.findViewById<View>(R.id.btnPixelEraser)?.setOnClickListener {
+            drawingView?.eraserMode = DrawingView.EraserMode.PIXEL
+            updateEraserModeIndicators()
+            eraserPage.visibility = View.GONE
+            toolbar?.visibility = View.VISIBLE
+        }
+        
+        // Stroke eraser option
+        eraserPage.findViewById<View>(R.id.btnStrokeEraser)?.setOnClickListener {
+            drawingView?.eraserMode = DrawingView.EraserMode.STROKE
+            updateEraserModeIndicators()
+            eraserPage.visibility = View.GONE
+            toolbar?.visibility = View.VISIBLE
+        }
+    }
+    
+    /**
+     * Updates the eraser mode indicators to show which mode is active.
+     */
+    private fun updateEraserModeIndicators() {
+        val eraserPage = toolbarView?.findViewById<View>(R.id.eraserPage) ?: return
+        val isPixelMode = drawingView?.eraserMode == DrawingView.EraserMode.PIXEL
+        
+        eraserPage.findViewById<View>(R.id.pixelEraserIndicator)?.backgroundTintList = 
+            android.content.res.ColorStateList.valueOf(
+                if (isPixelMode) 0xFF4CAF50.toInt() else 0xFF888888.toInt()
+            )
+        eraserPage.findViewById<View>(R.id.strokeEraserIndicator)?.backgroundTintList = 
+            android.content.res.ColorStateList.valueOf(
+                if (!isPixelMode) 0xFF4CAF50.toInt() else 0xFF888888.toInt()
+            )
     }
 
     private fun toggleGradientMode() {
