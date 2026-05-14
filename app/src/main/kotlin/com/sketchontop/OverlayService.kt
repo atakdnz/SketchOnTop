@@ -395,7 +395,8 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         val rawX = event.rawX - targetLocation[0]
         val rawY = event.rawY - targetLocation[1]
         if (rawX >= 0f && rawX <= target.width && rawY >= 0f && rawY <= target.height) {
-            return rawX to rawY
+            return rawX.coerceIn(0f, target.width.toFloat()) to
+                rawY.coerceIn(0f, target.height.toFloat())
         }
 
         val root = toolbarView ?: return null
@@ -403,7 +404,8 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         root.getLocationOnScreen(rootLocation)
         val screenX = rootLocation[0] + event.x
         val screenY = rootLocation[1] + event.y
-        return (screenX - targetLocation[0]) to (screenY - targetLocation[1])
+        return (screenX - targetLocation[0]).coerceIn(0f, target.width.toFloat()) to
+            (screenY - targetLocation[1]).coerceIn(0f, target.height.toFloat())
     }
 
     private fun isRawPointInsideView(rawX: Float, rawY: Float, view: View): Boolean {

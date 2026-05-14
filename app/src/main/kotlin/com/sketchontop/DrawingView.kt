@@ -751,7 +751,7 @@ class DrawingView @JvmOverloads constructor(
     }
 
     private fun pressureAdjustedWidth(baseWidth: Float, pressure: Float): Float {
-        return baseWidth * (0.9f + pressure.coerceIn(0f, 1f) * 0.35f)
+        return baseWidth * (0.6f + pressure.coerceIn(0f, 1f) * 0.8f)
     }
     
     /**
