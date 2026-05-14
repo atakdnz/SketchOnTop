@@ -82,6 +82,7 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
     private var isSPenInContact = false
     private var accessibilityStylusModeActive = false
     private var accessibilityStylusStartedOnToolbar = false
+    private var accessibilityStylusToolbarTarget: View? = null
     
     // Handler for delayed canvas reset
     private val handler = Handler(Looper.getMainLooper())
@@ -308,11 +309,13 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
 
     private fun handleAccessibilityToolbarStylusEvent(event: MotionEvent): Boolean {
         val toolbarRoot = toolbarView ?: return false
-        val isInsideToolbar = isRawPointInsideView(event.rawX, event.rawY, toolbarRoot)
+        val target = findToolbarChildForStylusEvent(toolbarRoot, event)
+        val isInsideToolbar = target != null || isRawPointInsideView(event.rawX, event.rawY, toolbarRoot)
 
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 accessibilityStylusStartedOnToolbar = isInsideToolbar
+                accessibilityStylusToolbarTarget = target
                 return accessibilityStylusStartedOnToolbar
             }
             MotionEvent.ACTION_MOVE -> {
@@ -321,21 +324,33 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
             MotionEvent.ACTION_UP -> {
                 if (accessibilityStylusStartedOnToolbar) {
                     accessibilityStylusStartedOnToolbar = false
-                    if (isInsideToolbar) {
-                        findClickableChildAt(toolbarRoot, event.rawX, event.rawY)?.performClick()
-                    }
+                    (target ?: accessibilityStylusToolbarTarget)?.performClick()
+                    accessibilityStylusToolbarTarget = null
                     return true
                 }
             }
             MotionEvent.ACTION_CANCEL -> {
                 if (accessibilityStylusStartedOnToolbar) {
                     accessibilityStylusStartedOnToolbar = false
+                    accessibilityStylusToolbarTarget = null
                     return true
                 }
             }
         }
 
         return isInsideToolbar
+    }
+
+    private fun findToolbarChildForStylusEvent(toolbarRoot: View, event: MotionEvent): View? {
+        findClickableChildAt(toolbarRoot, event.rawX, event.rawY)?.let { return it }
+
+        val localX = event.x
+        val localY = event.y
+        if (localX >= 0f && localX <= toolbarRoot.width && localY >= 0f && localY <= toolbarRoot.height) {
+            return findClickableChildAtLocal(toolbarRoot, localX, localY)
+        }
+
+        return null
     }
 
     private fun isRawPointInsideView(rawX: Float, rawY: Float, view: View): Boolean {
@@ -353,6 +368,26 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         if (view is ViewGroup) {
             for (i in view.childCount - 1 downTo 0) {
                 val childHit = findClickableChildAt(view.getChildAt(i), rawX, rawY)
+                if (childHit != null) return childHit
+            }
+        }
+
+        return if (view.isClickable || view.hasOnClickListeners()) view else null
+    }
+
+    private fun findClickableChildAtLocal(view: View, localX: Float, localY: Float): View? {
+        if (!view.isShown || localX < 0f || localY < 0f || localX > view.width || localY > view.height) {
+            return null
+        }
+
+        if (view is ViewGroup) {
+            for (i in view.childCount - 1 downTo 0) {
+                val child = view.getChildAt(i)
+                val childHit = findClickableChildAtLocal(
+                    child,
+                    localX - child.left + child.scrollX,
+                    localY - child.top + child.scrollY
+                )
                 if (childHit != null) return childHit
             }
         }
