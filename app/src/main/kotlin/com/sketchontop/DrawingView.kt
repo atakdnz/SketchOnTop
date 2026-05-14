@@ -730,6 +730,13 @@ class DrawingView @JvmOverloads constructor(
      * Gets the stroke width for the current tool.
      */
     fun getStrokeWidth(): Float = toolStrokeWidths[currentTool] ?: 10f
+
+    fun setStrokeWidthForTool(tool: Tool, width: Float) {
+        toolStrokeWidths[tool] = width.coerceIn(1f, 100f)
+        if (tool == currentTool) {
+            currentPaint.strokeWidth = toolStrokeWidths[tool] ?: 10f
+        }
+    }
     
     /**
      * Toggles visibility of all drawings.

@@ -270,9 +270,10 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         setupAccessibilityStylusInput()
         setupToolbar()
         setupEraserPage()
+        applyDrawingSettings()
         
         // Set default tool
-        selectTool(DrawingView.Tool.PEN)
+        selectTool(drawingView?.getTool() ?: DrawingView.Tool.PEN, persist = false)
         applySPenModeState()
         setWhiteboardModeEnabled(isWhiteboardModeEnabled)
         
@@ -613,6 +614,9 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
                 object : SeekBar.OnSeekBarChangeListener {
                     override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                         drawingView?.setStrokeWidth((progress + 2).toFloat())
+                        if (fromUser) {
+                            saveCurrentToolSettings()
+                        }
                         updateBrushPreview()
                     }
                     override fun onStartTrackingTouch(seekBar: SeekBar?) {}
@@ -698,6 +702,7 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
                 drawingView?.gradientBrushEnabled = true
                 drawingView?.currentGradient = preset
                 isGradientModeEnabled = true
+                saveDrawingSettings()
                 
                 // Update gradient mode button tint
                 toolbarView?.findViewById<ImageButton>(R.id.btnGradientMode)?.imageTintList = 
@@ -723,6 +728,7 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
     private fun selectColor(color: Int) {
         currentColor = color
         drawingView?.setColor(color)
+        saveDrawingSettings()
         updateBrushPreview()
         
         if (drawingView?.getTool() == DrawingView.Tool.ERASER) {
@@ -766,7 +772,10 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
                         GradientDrawable.Orientation.LEFT_RIGHT,
                         preset.colors
                     ).apply { cornerRadius = 4f }
-                    setOnClickListener { drawingView?.currentGradient = preset }
+                    setOnClickListener {
+                        drawingView?.currentGradient = preset
+                        saveDrawingSettings()
+                    }
                 }
                 container.addView(button)
             }
@@ -868,6 +877,7 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         // Pixel eraser option
         eraserPage.findViewById<View>(R.id.btnPixelEraser)?.setOnClickListener {
             drawingView?.eraserMode = DrawingView.EraserMode.PIXEL
+            saveDrawingSettings()
             updateEraserModeIndicators()
             eraserPage.visibility = View.GONE
             toolbar?.visibility = View.VISIBLE
@@ -876,6 +886,7 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         // Stroke eraser option
         eraserPage.findViewById<View>(R.id.btnStrokeEraser)?.setOnClickListener {
             drawingView?.eraserMode = DrawingView.EraserMode.STROKE
+            saveDrawingSettings()
             updateEraserModeIndicators()
             eraserPage.visibility = View.GONE
             toolbar?.visibility = View.VISIBLE
@@ -902,6 +913,7 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
     private fun toggleGradientMode() {
         isGradientModeEnabled = !isGradientModeEnabled
         drawingView?.gradientBrushEnabled = isGradientModeEnabled
+        saveDrawingSettings()
         
         toolbarView?.let { view ->
             view.findViewById<ImageButton>(R.id.btnGradientMode)?.setColorFilter(
@@ -968,8 +980,64 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         }
     }
 
-    private fun selectTool(tool: DrawingView.Tool) {
+    private fun applyDrawingSettings() {
+        currentColor = SPenSettings.currentColor(this)
+        isGradientModeEnabled = SPenSettings.gradientEnabled(this)
+
+        drawingView?.let { view ->
+            DrawingView.Tool.values().forEach { tool ->
+                view.setStrokeWidthForTool(tool, SPenSettings.toolWidth(this, tool))
+            }
+            view.setColor(currentColor)
+            view.eraserMode = SPenSettings.eraserMode(this)
+            view.gradientBrushEnabled = isGradientModeEnabled
+            view.currentGradient = SPenSettings.gradientPreset(this)
+            view.setTool(SPenSettings.savedTool(this))
+        }
+
+        toolbarView?.findViewById<ImageButton?>(R.id.btnGradientMode)?.setColorFilter(
+            if (isGradientModeEnabled) 0xFFFF9800.toInt() else 0xFFFFFFFF.toInt()
+        )
+        toolbarView?.findViewById<HorizontalScrollView?>(R.id.gradientPresetsContainer)?.visibility =
+            if (isGradientModeEnabled) View.VISIBLE else View.GONE
+        updateBrushPreview()
+    }
+
+    private fun saveCurrentToolSettings() {
+        val tool = drawingView?.getTool() ?: return
+        val key = when (tool) {
+            DrawingView.Tool.PEN -> SPenSettings.KEY_PEN_WIDTH
+            DrawingView.Tool.HIGHLIGHTER -> SPenSettings.KEY_HIGHLIGHTER_WIDTH
+            DrawingView.Tool.ERASER -> SPenSettings.KEY_ERASER_WIDTH
+        }
+        SPenSettings.prefs(this)
+            .edit()
+            .putFloat(key, drawingView?.getStrokeWidth() ?: 10f)
+            .apply()
+    }
+
+    private fun saveDrawingSettings() {
+        val view = drawingView ?: return
+        val editor = SPenSettings.prefs(this).edit()
+            .putString(SPenSettings.KEY_SELECTED_TOOL, view.getTool().name)
+            .putInt(SPenSettings.KEY_CURRENT_COLOR, currentColor)
+            .putString(SPenSettings.KEY_ERASER_MODE, view.eraserMode.name)
+            .putBoolean(SPenSettings.KEY_GRADIENT_ENABLED, isGradientModeEnabled)
+            .putString(SPenSettings.KEY_GRADIENT_PRESET, view.currentGradient.name)
+
+        val widthKey = when (view.getTool()) {
+            DrawingView.Tool.PEN -> SPenSettings.KEY_PEN_WIDTH
+            DrawingView.Tool.HIGHLIGHTER -> SPenSettings.KEY_HIGHLIGHTER_WIDTH
+            DrawingView.Tool.ERASER -> SPenSettings.KEY_ERASER_WIDTH
+        }
+        editor.putFloat(widthKey, view.getStrokeWidth()).apply()
+    }
+
+    private fun selectTool(tool: DrawingView.Tool, persist: Boolean = true) {
         drawingView?.setTool(tool)
+        if (persist) {
+            saveDrawingSettings()
+        }
         
         toolbarView?.let { view ->
             view.findViewById<ImageButton>(R.id.btnPen).isSelected = (tool == DrawingView.Tool.PEN)
