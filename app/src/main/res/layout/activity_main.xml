@@ -1,13 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#1A1A2E"
-    android:gravity="center"
-    android:orientation="vertical"
-    android:padding="24dp">
+    android:fillViewport="true">
 
-    <ImageView
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <ImageView
         android:layout_width="96dp"
         android:layout_height="96dp"
         android:src="@drawable/ic_pen"
@@ -76,4 +81,126 @@
         android:textColor="#666666"
         android:textSize="12sp" />
 
-</LinearLayout>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:background="#262640"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Overlay settings"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <Switch
+                android:id="@+id/switchAccessibilityStylusInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Accessibility S Pen input"
+                android:textColor="#DDDDDD"
+                android:textSize="14sp" />
+
+            <Switch
+                android:id="@+id/switchCompactToolbar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="Compact horizontal toolbar"
+                android:textColor="#DDDDDD"
+                android:textSize="14sp" />
+
+            <Switch
+                android:id="@+id/switchSPenButtonMode"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Side button switches to navigation"
+                android:textColor="#DDDDDD"
+                android:textSize="14sp" />
+
+            <Switch
+                android:id="@+id/switchHoverArmDrawing"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="Hover arms drawing in S Pen mode"
+                android:textColor="#DDDDDD"
+                android:textSize="14sp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Finger passthrough reset delay (ms)"
+                android:textColor="#AAAAAA"
+                android:textSize="13sp" />
+
+            <EditText
+                android:id="@+id/inputFingerResetDelay"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="number"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#777777" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Button navigation window (ms, 0 = stay in navigation)"
+                android:textColor="#AAAAAA"
+                android:textSize="13sp" />
+
+            <EditText
+                android:id="@+id/inputButtonReenableDelay"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="number"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#777777" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Hover exit delay (ms)"
+                android:textColor="#AAAAAA"
+                android:textSize="13sp" />
+
+            <EditText
+                android:id="@+id/inputHoverExitDelay"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="number"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#777777" />
+
+            <Button
+                android:id="@+id/btnSaveSPenSettings"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:backgroundTint="#2196F3"
+                android:text="Save S Pen Settings"
+                android:textColor="#FFFFFF" />
+
+            <Button
+                android:id="@+id/btnOpenAccessibilitySettings"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="#607D8B"
+                android:text="Open Accessibility Settings"
+                android:textColor="#FFFFFF" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</ScrollView>

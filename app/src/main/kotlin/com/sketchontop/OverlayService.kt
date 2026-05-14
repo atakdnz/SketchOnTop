@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
@@ -18,6 +19,7 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.HorizontalScrollView
 import android.widget.ImageButton
@@ -34,7 +36,7 @@ import androidx.core.app.NotificationCompat
  *   - Finger: toggles FLAG_NOT_TOUCHABLE to pass through (first touch lost, subsequent work)
  * - Enhanced (with AccessibilityService): Perfect separation, all touches work
  */
-class OverlayService : Service() {
+class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeListener {
 
     private lateinit var windowManager: WindowManager
     
@@ -49,6 +51,7 @@ class OverlayService : Service() {
     private var initialY: Int = 0
     private var initialTouchX: Float = 0f
     private var initialTouchY: Float = 0f
+    private var toolbarDragged: Boolean = false
     
     private var drawingView: DrawingView? = null
     private var toolbar: LinearLayout? = null
@@ -60,6 +63,17 @@ class OverlayService : Service() {
     private var isGradientModeEnabled = false
     private var isToolbarExpanded = true
     private var currentColor = Color.BLACK
+    private var accessibilityStylusInputEnabled = true
+    private var compactToolbarEnabled = true
+    private var sPenButtonTogglesDrawMode = false
+    private var fingerPassthroughResetDelayMs = SPenSettings.DEFAULT_FINGER_PASSTHROUGH_RESET_DELAY_MS
+    private var sPenButtonReenableDelayMs = SPenSettings.DEFAULT_SPEN_BUTTON_REENABLE_DELAY_MS
+    private var hoverArmsDrawing = false
+    private var hoverExitDelayMs = SPenSettings.DEFAULT_HOVER_EXIT_DELAY_MS
+    private var isSPenHovering = false
+    private var isSPenInContact = false
+    private var accessibilityStylusModeActive = false
+    private var accessibilityStylusStartedOnToolbar = false
     
     // Handler for delayed canvas reset
     private val handler = Handler(Looper.getMainLooper())
@@ -70,18 +84,29 @@ class OverlayService : Service() {
         }
     }
 
+    private val reenableDrawModeRunnable = Runnable {
+        if (isSPenModeEnabled) {
+            setDrawModeEnabled(true)
+        }
+    }
+
+    private val hoverExitRunnable = Runnable {
+        if (hoverArmsDrawing && isSPenModeEnabled && !isSPenHovering && !isSPenInContact) {
+            setHoverListeningMode()
+        }
+    }
+
     companion object {
         const val CHANNEL_ID = "SketchOnTopChannel"
         const val NOTIFICATION_ID = 1
         const val ACTION_STOP = "com.sketchontop.STOP"
-        // Time to keep canvas non-touchable after finger touch
-        // Long enough for user interaction, then resets for stylus
-        const val CANVAS_RESET_DELAY_MS = 5000L
     }
 
     override fun onCreate() {
         super.onCreate()
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        loadSPenSettings()
+        SPenSettings.prefs(this).registerOnSharedPreferenceChangeListener(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -102,7 +127,40 @@ class OverlayService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         handler.removeCallbacksAndMessages(null)
+        StylusSensorService.setStylusListeningEnabled(false)
+        if (StylusSensorService.onStylusMotionEvent != null) {
+            StylusSensorService.onStylusMotionEvent = null
+        }
+        SPenSettings.prefs(this).unregisterOnSharedPreferenceChangeListener(this)
         removeOverlay()
+    }
+
+    override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
+        if (key == SPenSettings.KEY_SPEN_BUTTON_TOGGLES_DRAW_MODE ||
+            key == SPenSettings.KEY_FINGER_PASSTHROUGH_RESET_DELAY_MS ||
+            key == SPenSettings.KEY_SPEN_BUTTON_REENABLE_DELAY_MS ||
+            key == SPenSettings.KEY_HOVER_ARM_DRAWING ||
+            key == SPenSettings.KEY_HOVER_EXIT_DELAY_MS ||
+            key == SPenSettings.KEY_ACCESSIBILITY_STYLUS_INPUT ||
+            key == SPenSettings.KEY_COMPACT_TOOLBAR
+        ) {
+            loadSPenSettings()
+        }
+    }
+
+    private fun loadSPenSettings() {
+        accessibilityStylusInputEnabled = SPenSettings.accessibilityStylusInput(this)
+        compactToolbarEnabled = SPenSettings.compactToolbar(this)
+        sPenButtonTogglesDrawMode = SPenSettings.sPenButtonTogglesDrawMode(this)
+        fingerPassthroughResetDelayMs = SPenSettings.fingerPassthroughResetDelayMs(this)
+        sPenButtonReenableDelayMs = SPenSettings.sPenButtonReenableDelayMs(this)
+        hoverArmsDrawing = SPenSettings.hoverArmsDrawing(this)
+        hoverExitDelayMs = SPenSettings.hoverExitDelayMs(this)
+        drawingView?.sPenButtonTogglesDrawMode = sPenButtonTogglesDrawMode
+        drawingView?.hoverGateEnabled = hoverArmsDrawing
+        if (!hoverArmsDrawing) {
+            drawingView?.hoverDrawingArmed = true
+        }
     }
 
     private fun createNotificationChannel() {
@@ -172,7 +230,10 @@ class OverlayService : Service() {
         windowManager.addView(canvasView, canvasParams)
         
         // === Toolbar Window (wrap content, always touchable) ===
-        toolbarView = inflater.inflate(R.layout.overlay_toolbar, null)
+        toolbarView = inflater.inflate(
+            if (compactToolbarEnabled) R.layout.overlay_toolbar_compact else R.layout.overlay_toolbar,
+            null
+        )
         
         // Get display width for top-right positioning
         val displayMetrics = resources.displayMetrics
@@ -186,14 +247,15 @@ class OverlayService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = displayWidth - 150  // Start on right side (approximate toolbar width)
-            y = 48
+            x = if (compactToolbarEnabled) (displayWidth / 2) - 130 else displayWidth - 150
+            y = if (compactToolbarEnabled) 24 else 48
         }
         windowManager.addView(toolbarView, toolbarParams)
         
         // Initialize views
         initViews()
         setupDrawingViewCallbacks()
+        setupAccessibilityStylusInput()
         setupToolbar()
         setupEraserPage()
         
@@ -202,6 +264,85 @@ class OverlayService : Service() {
         
         // Enable toolbar dragging
         setupToolbarDrag()
+    }
+
+    private fun setupAccessibilityStylusInput() {
+        StylusSensorService.setStylusListeningEnabled(accessibilityStylusInputEnabled)
+        accessibilityStylusModeActive = accessibilityStylusInputEnabled &&
+            android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+            StylusSensorService.isRunning
+
+        StylusSensorService.onStylusMotionEvent = { event ->
+            handler.post {
+                try {
+                    accessibilityStylusModeActive = accessibilityStylusInputEnabled &&
+                        android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+                        StylusSensorService.isRunning
+                    if (accessibilityStylusModeActive && isSPenModeEnabled) {
+                        setCanvasTouchable(false)
+                        if (!handleAccessibilityToolbarStylusEvent(event)) {
+                            drawingView?.handleExternalStylusEvent(event)
+                        }
+                    }
+                } finally {
+                    event.recycle()
+                }
+            }
+        }
+    }
+
+    private fun handleAccessibilityToolbarStylusEvent(event: MotionEvent): Boolean {
+        val toolbarRoot = toolbarView ?: return false
+        val isInsideToolbar = isRawPointInsideView(event.rawX, event.rawY, toolbarRoot)
+
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                accessibilityStylusStartedOnToolbar = isInsideToolbar
+                return accessibilityStylusStartedOnToolbar
+            }
+            MotionEvent.ACTION_MOVE -> {
+                return accessibilityStylusStartedOnToolbar
+            }
+            MotionEvent.ACTION_UP -> {
+                if (accessibilityStylusStartedOnToolbar) {
+                    accessibilityStylusStartedOnToolbar = false
+                    if (isInsideToolbar) {
+                        findClickableChildAt(toolbarRoot, event.rawX, event.rawY)?.performClick()
+                    }
+                    return true
+                }
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                if (accessibilityStylusStartedOnToolbar) {
+                    accessibilityStylusStartedOnToolbar = false
+                    return true
+                }
+            }
+        }
+
+        return isInsideToolbar
+    }
+
+    private fun isRawPointInsideView(rawX: Float, rawY: Float, view: View): Boolean {
+        val location = IntArray(2)
+        view.getLocationOnScreen(location)
+        return rawX >= location[0] &&
+            rawX <= location[0] + view.width &&
+            rawY >= location[1] &&
+            rawY <= location[1] + view.height
+    }
+
+    private fun findClickableChildAt(view: View, rawX: Float, rawY: Float): View? {
+        if (!view.isShown || !isRawPointInsideView(rawX, rawY, view)) return null
+
+        if (view is ViewGroup) {
+            for (i in view.childCount - 1 downTo 0) {
+                val childHit = findClickableChildAt(view.getChildAt(i), rawX, rawY)
+                if (childHit != null) return childHit
+            }
+        }
+
+        return if (view.isClickable || view.hasOnClickListeners()) view else null
     }
 
     private fun removeOverlay() {
@@ -236,9 +377,44 @@ class OverlayService : Service() {
                 // Schedule reset to touchable after a short delay
                 // This allows the next stylus input to be detected
                 handler.removeCallbacks(resetCanvasRunnable)
-                handler.postDelayed(resetCanvasRunnable, CANVAS_RESET_DELAY_MS)
+                handler.postDelayed(resetCanvasRunnable, fingerPassthroughResetDelayMs)
             }
         }
+        drawingView?.onSPenButtonModeSwitchRequested = {
+            if (sPenButtonTogglesDrawMode) {
+                setDrawModeEnabled(false)
+                handler.removeCallbacks(reenableDrawModeRunnable)
+                if (sPenButtonReenableDelayMs > 0L) {
+                    handler.postDelayed(reenableDrawModeRunnable, sPenButtonReenableDelayMs)
+                }
+            }
+        }
+        drawingView?.onSPenHoverChanged = { isHovering ->
+            if (hoverArmsDrawing && isSPenModeEnabled) {
+                isSPenHovering = isHovering
+                handler.removeCallbacks(hoverExitRunnable)
+                if (isHovering) {
+                    drawingView?.hoverDrawingArmed = true
+                    setDrawModeEnabled(true)
+                } else if (!isSPenInContact) {
+                    handler.postDelayed(hoverExitRunnable, hoverExitDelayMs)
+                }
+            }
+        }
+        drawingView?.onSPenContactChanged = { isInContact ->
+            if (hoverArmsDrawing && isSPenModeEnabled) {
+                isSPenInContact = isInContact
+                handler.removeCallbacks(hoverExitRunnable)
+                if (isInContact) {
+                    drawingView?.hoverDrawingArmed = true
+                    setDrawModeEnabled(true)
+                } else if (!isSPenHovering) {
+                    handler.postDelayed(hoverExitRunnable, hoverExitDelayMs)
+                }
+            }
+        }
+        drawingView?.sPenButtonTogglesDrawMode = sPenButtonTogglesDrawMode
+        drawingView?.hoverGateEnabled = hoverArmsDrawing
     }
     
     /**
@@ -249,6 +425,7 @@ class OverlayService : Service() {
         toolbarView?.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
+                    toolbarDragged = false
                     toolbarParams?.let { params ->
                         initialX = params.x
                         initialY = params.y
@@ -258,16 +435,27 @@ class OverlayService : Service() {
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
+                    val deltaX = event.rawX - initialTouchX
+                    val deltaY = event.rawY - initialTouchY
+                    if (kotlin.math.abs(deltaX) > 6 || kotlin.math.abs(deltaY) > 6) {
+                        toolbarDragged = true
+                    }
                     toolbarParams?.let { params ->
-                        params.x = initialX + (event.rawX - initialTouchX).toInt()
-                        params.y = initialY + (event.rawY - initialTouchY).toInt()
+                        params.x = initialX + deltaX.toInt()
+                        params.y = initialY + deltaY.toInt()
                         try {
                             windowManager.updateViewLayout(toolbarView, params)
                         } catch (e: Exception) {}
                     }
                     true
                 }
-                else -> false
+                MotionEvent.ACTION_UP -> {
+                    if (!toolbarDragged && !isToolbarExpanded) {
+                        expandToolbar()
+                    }
+                    true
+                }
+                else -> true
             }
         }
     }
@@ -299,9 +487,12 @@ class OverlayService : Service() {
         toolbarView?.let { view ->
             // Tool buttons
             view.findViewById<ImageButton>(R.id.btnPen).setOnClickListener { 
-                selectTool(DrawingView.Tool.PEN) 
+                selectTool(DrawingView.Tool.PEN)
+                if (compactToolbarEnabled) {
+                    openPenSettingsPage()
+                }
             }
-            view.findViewById<ImageButton>(R.id.btnHighlighter).setOnClickListener { 
+            view.findViewById<ImageButton?>(R.id.btnHighlighter)?.setOnClickListener { 
                 selectTool(DrawingView.Tool.HIGHLIGHTER) 
             }
             view.findViewById<ImageButton>(R.id.btnEraser).setOnClickListener { 
@@ -314,26 +505,35 @@ class OverlayService : Service() {
             }
             
             // Mode toggles
-            view.findViewById<ImageButton>(R.id.btnDrawMode).setOnClickListener { 
+            view.findViewById<ImageButton?>(R.id.btnDrawMode)?.setOnClickListener { 
                 toggleDrawMode() 
             }
-            view.findViewById<ImageButton>(R.id.btnSPenMode).setOnClickListener { 
+            view.findViewById<ImageButton?>(R.id.btnSPenMode)?.setOnClickListener { 
                 toggleSPenMode() 
             }
-            view.findViewById<ImageButton>(R.id.btnGradientMode).setOnClickListener { 
+            view.findViewById<ImageButton?>(R.id.btnGradientMode)?.setOnClickListener { 
                 toggleGradientMode() 
             }
             
             // Action buttons
-            view.findViewById<ImageButton>(R.id.btnMinimize).setOnClickListener { 
+            view.findViewById<ImageButton?>(R.id.btnMinimize)?.setOnClickListener { 
                 minimizeToolbar() 
             }
-            view.findViewById<ImageButton>(R.id.btnSettings).setOnClickListener { 
+            view.findViewById<ImageButton?>(R.id.btnSettings)?.setOnClickListener { 
                 openSettings() 
             }
             btnExpand?.setOnClickListener { expandToolbar() }
+            view.findViewById<View?>(R.id.btnMore)?.setOnClickListener {
+                openOverflowPage()
+            }
+            view.findViewById<View?>(R.id.btnOverflowBack)?.setOnClickListener {
+                closeSecondaryPanels()
+            }
+            view.findViewById<View?>(R.id.btnPenSettingsBack)?.setOnClickListener {
+                closeSecondaryPanels()
+            }
             
-            view.findViewById<ImageButton>(R.id.btnToggleVisibility).setOnClickListener { 
+            view.findViewById<ImageButton?>(R.id.btnToggleVisibility)?.setOnClickListener { 
                 toggleDrawingsVisibility() 
             }
             view.findViewById<ImageButton>(R.id.btnUndo).setOnClickListener { 
@@ -368,17 +568,23 @@ class OverlayService : Service() {
 
     private fun setupColorPicker(view: View) {
         val colorPickerPage = toolbarView?.findViewById<View>(R.id.colorPickerPage)
+        val penSettingsPage = toolbarView?.findViewById<View>(R.id.penSettingsPage)
         
         // Open color picker page when brush preview is tapped
         view.findViewById<View>(R.id.btnOpenColorPicker)?.setOnClickListener {
             toolbar?.visibility = View.GONE
+            penSettingsPage?.visibility = View.GONE
             colorPickerPage?.visibility = View.VISIBLE
         }
         
         // Back button closes color picker page
         colorPickerPage?.findViewById<View>(R.id.btnColorPickerBack)?.setOnClickListener {
             colorPickerPage.visibility = View.GONE
-            toolbar?.visibility = View.VISIBLE
+            if (compactToolbarEnabled) {
+                penSettingsPage?.visibility = View.VISIBLE
+            } else {
+                toolbar?.visibility = View.VISIBLE
+            }
         }
         
         // Color grid click handlers
@@ -399,7 +605,11 @@ class OverlayService : Service() {
                 selectColor(color)
                 // Auto close after selection
                 colorPickerPage.visibility = View.GONE
-                toolbar?.visibility = View.VISIBLE
+                if (compactToolbarEnabled) {
+                    penSettingsPage?.visibility = View.VISIBLE
+                } else {
+                    toolbar?.visibility = View.VISIBLE
+                }
             }
         }
         
@@ -439,7 +649,11 @@ class OverlayService : Service() {
                 
                 // Close color picker and return to toolbar
                 colorPickerPage?.visibility = View.GONE
-                toolbar?.visibility = View.VISIBLE
+                if (compactToolbarEnabled) {
+                    penSettingsPage?.visibility = View.VISIBLE
+                } else {
+                    toolbar?.visibility = View.VISIBLE
+                }
             }
         }
         
@@ -507,7 +721,11 @@ class OverlayService : Service() {
      * Toggles draw mode. When OFF, the canvas window becomes non-touchable.
      */
     private fun toggleDrawMode() {
-        isDrawModeEnabled = !isDrawModeEnabled
+        setDrawModeEnabled(!isDrawModeEnabled)
+    }
+
+    private fun setDrawModeEnabled(enabled: Boolean) {
+        isDrawModeEnabled = enabled
         drawingView?.drawingEnabled = isDrawModeEnabled
         
         // Update canvas touchability
@@ -515,14 +733,29 @@ class OverlayService : Service() {
             // Draw mode OFF: canvas non-touchable (everything passes through)
             setCanvasTouchable(false)
         } else {
-            // Draw mode ON: canvas must be touchable to receive input
-            // (S Pen mode will handle finger passthrough dynamically)
-            setCanvasTouchable(true)
+            if (accessibilityStylusModeActive && isSPenModeEnabled) {
+                setCanvasTouchable(false)
+            } else {
+                // Draw mode ON: canvas must be touchable to receive input
+                // (S Pen mode will handle finger passthrough dynamically)
+                setCanvasTouchable(true)
+            }
         }
         
         // Update button tint
         toolbarView?.findViewById<ImageButton>(R.id.btnDrawMode)?.let { btn ->
             btn.setColorFilter(if (isDrawModeEnabled) 0xFF4CAF50.toInt() else 0xFF888888.toInt())
+        }
+    }
+
+    private fun setHoverListeningMode() {
+        isDrawModeEnabled = false
+        drawingView?.drawingEnabled = true
+        drawingView?.hoverDrawingArmed = false
+        setCanvasTouchable(true)
+
+        toolbarView?.findViewById<ImageButton>(R.id.btnDrawMode)?.let { btn ->
+            btn.setColorFilter(0xFF888888.toInt())
         }
     }
 
@@ -534,9 +767,18 @@ class OverlayService : Service() {
     private fun toggleSPenMode() {
         isSPenModeEnabled = !isSPenModeEnabled
         drawingView?.sPenOnlyMode = isSPenModeEnabled
+        handler.removeCallbacks(resetCanvasRunnable)
         
         // In S Pen mode, canvas needs to be touchable to detect tool type
-        if (isSPenModeEnabled && isDrawModeEnabled) {
+        accessibilityStylusModeActive = accessibilityStylusInputEnabled &&
+            android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+            StylusSensorService.isRunning
+
+        if (isSPenModeEnabled && isDrawModeEnabled && accessibilityStylusModeActive) {
+            setCanvasTouchable(false)
+        } else if (isSPenModeEnabled && isDrawModeEnabled) {
+            setCanvasTouchable(true)
+        } else if (!isSPenModeEnabled && isDrawModeEnabled) {
             setCanvasTouchable(true)
         }
         
@@ -632,6 +874,7 @@ class OverlayService : Service() {
 
     private fun minimizeToolbar() {
         isToolbarExpanded = false
+        closeSecondaryPanels()
         toolbar?.visibility = View.GONE
         btnExpand?.visibility = View.VISIBLE
     }
@@ -640,6 +883,30 @@ class OverlayService : Service() {
         isToolbarExpanded = true
         toolbar?.visibility = View.VISIBLE
         btnExpand?.visibility = View.GONE
+    }
+
+    private fun openPenSettingsPage() {
+        val penSettingsPage = toolbarView?.findViewById<View>(R.id.penSettingsPage) ?: return
+        closeSecondaryPanels()
+        toolbar?.visibility = View.GONE
+        penSettingsPage.visibility = View.VISIBLE
+    }
+
+    private fun closeSecondaryPanels() {
+        toolbarView?.findViewById<View>(R.id.overflowPage)?.visibility = View.GONE
+        toolbarView?.findViewById<View>(R.id.penSettingsPage)?.visibility = View.GONE
+        toolbarView?.findViewById<View>(R.id.colorPickerPage)?.visibility = View.GONE
+        toolbarView?.findViewById<View>(R.id.eraserPage)?.visibility = View.GONE
+        if (isToolbarExpanded) {
+            toolbar?.visibility = View.VISIBLE
+        }
+    }
+
+    private fun openOverflowPage() {
+        val overflowPage = toolbarView?.findViewById<View>(R.id.overflowPage) ?: return
+        closeSecondaryPanels()
+        toolbar?.visibility = View.GONE
+        overflowPage.visibility = View.VISIBLE
     }
     
     /**

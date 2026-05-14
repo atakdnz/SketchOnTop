@@ -6,6 +6,8 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Button
+import android.widget.EditText
+import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -27,6 +29,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnStartOverlay: Button
     private lateinit var btnStopOverlay: Button
     private lateinit var btnGrantPermission: Button
+    private lateinit var switchAccessibilityStylusInput: Switch
+    private lateinit var switchCompactToolbar: Switch
+    private lateinit var switchSPenButtonMode: Switch
+    private lateinit var switchHoverArmDrawing: Switch
+    private lateinit var inputFingerResetDelay: EditText
+    private lateinit var inputButtonReenableDelay: EditText
+    private lateinit var inputHoverExitDelay: EditText
+    private lateinit var btnSaveSPenSettings: Button
+    private lateinit var btnOpenAccessibilitySettings: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -57,6 +68,15 @@ class MainActivity : AppCompatActivity() {
         btnStartOverlay = findViewById(R.id.btnStartOverlay)
         btnStopOverlay = findViewById(R.id.btnStopOverlay)
         btnGrantPermission = findViewById(R.id.btnGrantPermission)
+        switchAccessibilityStylusInput = findViewById(R.id.switchAccessibilityStylusInput)
+        switchCompactToolbar = findViewById(R.id.switchCompactToolbar)
+        switchSPenButtonMode = findViewById(R.id.switchSPenButtonMode)
+        switchHoverArmDrawing = findViewById(R.id.switchHoverArmDrawing)
+        inputFingerResetDelay = findViewById(R.id.inputFingerResetDelay)
+        inputButtonReenableDelay = findViewById(R.id.inputButtonReenableDelay)
+        inputHoverExitDelay = findViewById(R.id.inputHoverExitDelay)
+        btnSaveSPenSettings = findViewById(R.id.btnSaveSPenSettings)
+        btnOpenAccessibilitySettings = findViewById(R.id.btnOpenAccessibilitySettings)
     }
 
     private fun setupClickListeners() {
@@ -71,6 +91,14 @@ class MainActivity : AppCompatActivity() {
         
         btnStopOverlay.setOnClickListener {
             stopOverlayService()
+        }
+
+        btnSaveSPenSettings.setOnClickListener {
+            saveSPenSettings()
+        }
+
+        btnOpenAccessibilitySettings.setOnClickListener {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         }
     }
 
@@ -93,6 +121,50 @@ class MainActivity : AppCompatActivity() {
             btnStartOverlay.isEnabled = false
             btnStopOverlay.isEnabled = false
         }
+
+        updateSPenSettingsUI()
+    }
+
+    private fun updateSPenSettingsUI() {
+        switchSPenButtonMode.isChecked = SPenSettings.sPenButtonTogglesDrawMode(this)
+        switchAccessibilityStylusInput.isChecked = SPenSettings.accessibilityStylusInput(this)
+        switchCompactToolbar.isChecked = SPenSettings.compactToolbar(this)
+        switchHoverArmDrawing.isChecked = SPenSettings.hoverArmsDrawing(this)
+        inputFingerResetDelay.setText(SPenSettings.fingerPassthroughResetDelayMs(this).toString())
+        inputButtonReenableDelay.setText(SPenSettings.sPenButtonReenableDelayMs(this).toString())
+        inputHoverExitDelay.setText(SPenSettings.hoverExitDelayMs(this).toString())
+    }
+
+    private fun saveSPenSettings() {
+        val fingerDelay = parseDelay(
+            inputFingerResetDelay.text?.toString(),
+            SPenSettings.DEFAULT_FINGER_PASSTHROUGH_RESET_DELAY_MS
+        )
+        val buttonDelay = parseDelay(
+            inputButtonReenableDelay.text?.toString(),
+            SPenSettings.DEFAULT_SPEN_BUTTON_REENABLE_DELAY_MS
+        )
+        val hoverExitDelay = parseDelay(
+            inputHoverExitDelay.text?.toString(),
+            SPenSettings.DEFAULT_HOVER_EXIT_DELAY_MS
+        )
+
+        SPenSettings.prefs(this).edit()
+            .putBoolean(SPenSettings.KEY_ACCESSIBILITY_STYLUS_INPUT, switchAccessibilityStylusInput.isChecked)
+            .putBoolean(SPenSettings.KEY_COMPACT_TOOLBAR, switchCompactToolbar.isChecked)
+            .putBoolean(SPenSettings.KEY_SPEN_BUTTON_TOGGLES_DRAW_MODE, switchSPenButtonMode.isChecked)
+            .putBoolean(SPenSettings.KEY_HOVER_ARM_DRAWING, switchHoverArmDrawing.isChecked)
+            .putLong(SPenSettings.KEY_FINGER_PASSTHROUGH_RESET_DELAY_MS, fingerDelay)
+            .putLong(SPenSettings.KEY_SPEN_BUTTON_REENABLE_DELAY_MS, buttonDelay)
+            .putLong(SPenSettings.KEY_HOVER_EXIT_DELAY_MS, hoverExitDelay)
+            .apply()
+
+        updateSPenSettingsUI()
+        Toast.makeText(this, "S Pen settings saved", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun parseDelay(value: String?, fallback: Long): Long {
+        return SPenSettings.sanitizeDelay(value?.toLongOrNull() ?: fallback)
     }
 
     /**

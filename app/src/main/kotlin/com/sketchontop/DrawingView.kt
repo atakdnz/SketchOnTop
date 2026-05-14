@@ -3,6 +3,7 @@ package com.sketchontop
 import android.content.Context
 import android.graphics.*
 import android.util.AttributeSet
+import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 import com.sketchontop.models.Stroke
@@ -99,6 +100,15 @@ class DrawingView @JvmOverloads constructor(
     
     /** Callback when finger touch is detected in S Pen mode - used for dynamic FLAG toggle */
     var onFingerTouchDetected: (() -> Unit)? = null
+
+    /** Callback when the S Pen side button is pressed and configured to switch modes */
+    var onSPenButtonModeSwitchRequested: (() -> Unit)? = null
+
+    /** Callback for S Pen hover state changes */
+    var onSPenHoverChanged: ((isHovering: Boolean) -> Unit)? = null
+
+    /** Callback for active S Pen contact state changes */
+    var onSPenContactChanged: ((isInContact: Boolean) -> Unit)? = null
     
     /** Track if a stylus has ever been detected on this device */
     private var stylusDetected: Boolean = false
@@ -108,6 +118,20 @@ class DrawingView @JvmOverloads constructor(
     
     /** Store the tool before temporary eraser mode was activated */
     private var toolBeforeTemporaryEraser: Tool = Tool.PEN
+
+    /** Whether S Pen side button switches draw/navigation mode instead of erasing */
+    var sPenButtonTogglesDrawMode: Boolean = false
+
+    /** When enabled, stylus drawing is allowed only while hover is currently armed */
+    var hoverGateEnabled: Boolean = false
+
+    /** Whether hover mode currently allows stylus drawing */
+    var hoverDrawingArmed: Boolean = true
+
+    /** Tracks edge-triggered S Pen button presses */
+    private var wasStylusButtonPressed: Boolean = false
+
+    private var lastHoverEnterTimeMs: Long = 0L
     
     // ================================
     // Gradient Brush System
@@ -257,15 +281,43 @@ class DrawingView @JvmOverloads constructor(
         }
         
         // --------------------------------
+        // S Pen Button Detection
+        // --------------------------------
+        // Check if stylus button is pressed (S Pen side button)
+        // BUTTON_STYLUS_PRIMARY is the typical side button
+        // BUTTON_STYLUS_SECONDARY is sometimes used for a second button
+        val isStylusButtonPressed = (event.buttonState and MotionEvent.BUTTON_STYLUS_PRIMARY) != 0 ||
+                                    (event.buttonState and MotionEvent.BUTTON_STYLUS_SECONDARY) != 0
+
+        if ((isStylus || isStylusEraser) && sPenButtonTogglesDrawMode) {
+            val isNewButtonPress = isStylusButtonPressed &&
+                (!wasStylusButtonPressed || event.actionMasked == MotionEvent.ACTION_DOWN)
+            if (isNewButtonPress) {
+                wasStylusButtonPressed = true
+                onSPenButtonModeSwitchRequested?.invoke()
+                isDrawing = false
+                finishStroke()
+                invalidate()
+                return true
+            } else if (!isStylusButtonPressed) {
+                wasStylusButtonPressed = false
+            }
+        }
+
+        // --------------------------------
         // Drawing Mode Checks
         // --------------------------------
         
         // If drawing is completely disabled, pass all touches through
         if (!drawingEnabled) {
             // Exception: if sPenOnlyMode is on and this is a stylus, still allow drawing
-            if (!(sPenOnlyMode && (isStylus || isStylusEraser))) {
+            if (!(sPenOnlyMode && (isStylus || isStylusEraser) && !hoverGateEnabled)) {
                 return false  // Pass through to underlying app
             }
+        }
+
+        if (hoverGateEnabled && (isStylus || isStylusEraser) && !hoverDrawingArmed) {
+            return false
         }
         
         // S Pen only mode: allow stylus to draw, fingers pass through
@@ -278,26 +330,17 @@ class DrawingView @JvmOverloads constructor(
         }
         
         // --------------------------------
-        // S Pen Button Detection
-        // --------------------------------
-        // Check if stylus button is pressed (S Pen side button)
-        // BUTTON_STYLUS_PRIMARY is the typical side button
-        // BUTTON_STYLUS_SECONDARY is sometimes used for a second button
-        val isStylusButtonPressed = (event.buttonState and MotionEvent.BUTTON_STYLUS_PRIMARY) != 0 ||
-                                    (event.buttonState and MotionEvent.BUTTON_STYLUS_SECONDARY) != 0
-        
-        // --------------------------------
         // Determine Effective Tool
         // --------------------------------
         // Priority: 1) Stylus eraser end, 2) S Pen button pressed, 3) Selected tool
         val effectiveTool = when {
             isStylusEraser -> Tool.ERASER  // Physical eraser end of stylus
-            isStylusButtonPressed && isStylus -> Tool.ERASER  // S Pen button = temporary eraser
+            isStylusButtonPressed && isStylus && !sPenButtonTogglesDrawMode -> Tool.ERASER  // S Pen button = temporary eraser
             else -> currentTool
         }
         
         // Track temporary eraser mode for proper stroke handling
-        if (isStylusButtonPressed && isStylus && !temporaryEraserMode) {
+        if (isStylusButtonPressed && isStylus && !sPenButtonTogglesDrawMode && !temporaryEraserMode) {
             temporaryEraserMode = true
             toolBeforeTemporaryEraser = currentTool
         } else if (!isStylusButtonPressed && temporaryEraserMode) {
@@ -335,6 +378,10 @@ class DrawingView @JvmOverloads constructor(
         
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                if (isStylus || isStylusEraser) {
+                    onSPenContactChanged?.invoke(true)
+                }
+
                 // Request unbuffered dispatch for lower latency stylus input
                 requestUnbufferedDispatch(event)
                 
@@ -382,6 +429,10 @@ class DrawingView @JvmOverloads constructor(
             }
             
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (isStylus || isStylusEraser) {
+                    onSPenContactChanged?.invoke(false)
+                }
+
                 // Stop drawing
                 isDrawing = false
                 
@@ -392,6 +443,38 @@ class DrawingView @JvmOverloads constructor(
         }
         
         return super.onTouchEvent(event)
+    }
+
+    override fun onHoverEvent(event: MotionEvent): Boolean {
+        val pointerIndex = event.actionIndex.coerceAtLeast(0)
+        val toolType = event.getToolType(pointerIndex)
+        val isStylus = toolType == MotionEvent.TOOL_TYPE_STYLUS ||
+            toolType == MotionEvent.TOOL_TYPE_ERASER
+
+        if (!isStylus) {
+            return super.onHoverEvent(event)
+        }
+
+        when (event.actionMasked) {
+            MotionEvent.ACTION_HOVER_ENTER -> {
+                lastHoverEnterTimeMs = event.eventTime
+                Log.d("SketchOnTopHover", "S Pen hover enter x=${event.x} y=${event.y}")
+                onSPenHoverChanged?.invoke(true)
+            }
+            MotionEvent.ACTION_HOVER_MOVE -> {
+                if (lastHoverEnterTimeMs > 0L) {
+                    val elapsed = event.eventTime - lastHoverEnterTimeMs
+                    Log.d("SketchOnTopHover", "S Pen hover move after=${elapsed}ms x=${event.x} y=${event.y}")
+                    lastHoverEnterTimeMs = 0L
+                }
+            }
+            MotionEvent.ACTION_HOVER_EXIT -> {
+                Log.d("SketchOnTopHover", "S Pen hover exit x=${event.x} y=${event.y}")
+                onSPenHoverChanged?.invoke(false)
+            }
+        }
+
+        return false
     }
     
     /**
@@ -708,6 +791,80 @@ class DrawingView @JvmOverloads constructor(
      * Checks if redo is available.
      */
     fun canRedo(): Boolean = redoStack.isNotEmpty()
+
+    fun handleExternalStylusEvent(event: MotionEvent) {
+        val pointerIndex = event.actionIndex.coerceAtLeast(0)
+        val toolType = event.getToolType(pointerIndex)
+        val isStylus = toolType == MotionEvent.TOOL_TYPE_STYLUS
+        val isStylusEraser = toolType == MotionEvent.TOOL_TYPE_ERASER
+
+        if (!isStylus && !isStylusEraser) return
+
+        val isStylusButtonPressed = (event.buttonState and MotionEvent.BUTTON_STYLUS_PRIMARY) != 0 ||
+            (event.buttonState and MotionEvent.BUTTON_STYLUS_SECONDARY) != 0
+        val effectiveTool = when {
+            isStylusEraser -> Tool.ERASER
+            isStylusButtonPressed && isStylus && !sPenButtonTogglesDrawMode -> Tool.ERASER
+            else -> currentTool
+        }
+        val pressure = event.pressure.coerceIn(0f, 1f)
+        val baseWidth = toolStrokeWidths[effectiveTool] ?: 10f
+        val dynamicWidth = baseWidth * (0.5f + pressure * 0.5f)
+        val viewLocation = IntArray(2)
+        getLocationOnScreen(viewLocation)
+        val x = event.rawX - viewLocation[0]
+        val y = event.rawY - viewLocation[1]
+        val rawOffsetX = event.rawX - event.x
+        val rawOffsetY = event.rawY - event.y
+
+        when (event.actionMasked) {
+            MotionEvent.ACTION_HOVER_ENTER,
+            MotionEvent.ACTION_HOVER_MOVE -> {
+                currentTouchX = x
+                currentTouchY = y
+                onSPenHoverChanged?.invoke(true)
+            }
+            MotionEvent.ACTION_HOVER_EXIT -> {
+                onSPenHoverChanged?.invoke(false)
+            }
+            MotionEvent.ACTION_DOWN -> {
+                onSPenContactChanged?.invoke(true)
+                isDrawing = true
+                currentTouchX = x
+                currentTouchY = y
+                startStroke(x, y, dynamicWidth, effectiveTool)
+            }
+            MotionEvent.ACTION_MOVE -> {
+                currentTouchX = x
+                currentTouchY = y
+                currentPaint.strokeWidth = dynamicWidth
+
+                if (effectiveTool == Tool.ERASER) {
+                    currentEraserWidth = dynamicWidth
+                    if (eraserMode == EraserMode.STROKE) {
+                        eraseStrokesAt(x, y, dynamicWidth / 2)
+                    }
+                }
+
+                for (i in 0 until event.historySize) {
+                    val historicalRawX = event.getHistoricalX(i) + rawOffsetX
+                    val historicalRawY = event.getHistoricalY(i) + rawOffsetY
+                    continueStroke(
+                        historicalRawX - viewLocation[0],
+                        historicalRawY - viewLocation[1]
+                    )
+                }
+                continueStroke(x, y)
+                invalidate()
+            }
+            MotionEvent.ACTION_UP,
+            MotionEvent.ACTION_CANCEL -> {
+                onSPenContactChanged?.invoke(false)
+                isDrawing = false
+                finishStroke()
+            }
+        }
+    }
 
     // ================================
     // S Pen Remote SDK Integration Point
