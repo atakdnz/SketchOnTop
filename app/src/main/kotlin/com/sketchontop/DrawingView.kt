@@ -196,6 +196,9 @@ class DrawingView @JvmOverloads constructor(
     /** Eraser mode: PIXEL (default) or STROKE (erase whole strokes) */
     var eraserMode: EraserMode = EraserMode.PIXEL
 
+    /** Whether stylus pressure changes eraser width */
+    var eraserPressureEnabled: Boolean = false
+
     // ================================
     // Initialization
     // ================================
@@ -366,7 +369,7 @@ class DrawingView @JvmOverloads constructor(
         // Map pressure to stroke width:
         // At pressure 0: use 50% of base width
         // At pressure 1: use 100% of base width
-        val dynamicWidth = if (isStylus || isStylusEraser) {
+        val dynamicWidth = if ((isStylus || isStylusEraser) && (effectiveTool != Tool.ERASER || eraserPressureEnabled)) {
             baseWidth * (0.5f + pressure * 0.5f)
         } else {
             baseWidth  // No pressure adjustment for finger input
@@ -731,6 +734,8 @@ class DrawingView @JvmOverloads constructor(
      */
     fun getStrokeWidth(): Float = toolStrokeWidths[currentTool] ?: 10f
 
+    fun getStrokeWidthForTool(tool: Tool): Float = toolStrokeWidths[tool] ?: 10f
+
     fun setStrokeWidthForTool(tool: Tool, width: Float) {
         toolStrokeWidths[tool] = width.coerceIn(1f, 100f)
         if (tool == currentTool) {
@@ -830,7 +835,11 @@ class DrawingView @JvmOverloads constructor(
         }
         val pressure = event.pressure.coerceIn(0f, 1f)
         val baseWidth = toolStrokeWidths[effectiveTool] ?: 10f
-        val dynamicWidth = baseWidth * (0.5f + pressure * 0.5f)
+        val dynamicWidth = if (effectiveTool != Tool.ERASER || eraserPressureEnabled) {
+            baseWidth * (0.5f + pressure * 0.5f)
+        } else {
+            baseWidth
+        }
         val viewLocation = IntArray(2)
         getLocationOnScreen(viewLocation)
         val x = event.rawX - viewLocation[0]

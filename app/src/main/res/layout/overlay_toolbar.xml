@@ -483,6 +483,56 @@
 
         </LinearLayout>
 
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginVertical="8dp"
+            android:background="#40FFFFFF" />
+
+        <LinearLayout
+            android:layout_width="160dp"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Size"
+                android:textColor="@color/white"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/eraserSizeValue"
+                android:layout_width="32dp"
+                android:layout_height="wrap_content"
+                android:gravity="end"
+                android:text="30"
+                android:textColor="@color/white"
+                android:textSize="12sp" />
+
+        </LinearLayout>
+
+        <SeekBar
+            android:id="@+id/eraserSizeSeekBar"
+            android:layout_width="160dp"
+            android:layout_height="32dp"
+            android:max="99"
+            android:progress="29"
+            android:thumbTint="@color/toolbar_icon_tint"
+            android:progressTint="@color/toolbar_icon_tint" />
+
+        <CheckBox
+            android:id="@+id/checkboxEraserPressure"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:buttonTint="@color/toolbar_icon_tint"
+            android:checked="false"
+            android:text="Use pressure"
+            android:textColor="@color/white"
+            android:textSize="12sp" />
+
     </LinearLayout>
 
 </FrameLayout>

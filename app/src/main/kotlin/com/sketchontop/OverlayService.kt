@@ -22,6 +22,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.widget.CheckBox
 import android.widget.HorizontalScrollView
 import android.widget.ImageButton
 import android.widget.LinearLayout
@@ -857,7 +858,9 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         
         toolbar?.visibility = View.GONE
         eraserPage.visibility = View.VISIBLE
-        
+
+        updateEraserControls()
+
         // Update indicators based on current mode
         updateEraserModeIndicators()
     }
@@ -891,6 +894,31 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
             eraserPage.visibility = View.GONE
             toolbar?.visibility = View.VISIBLE
         }
+
+        eraserPage.findViewById<SeekBar?>(R.id.eraserSizeSeekBar)?.setOnSeekBarChangeListener(
+            object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                    val width = (progress + 1).toFloat()
+                    drawingView?.setStrokeWidthForTool(DrawingView.Tool.ERASER, width)
+                    eraserPage.findViewById<android.widget.TextView?>(R.id.eraserSizeValue)?.text =
+                        width.toInt().toString()
+                    if (fromUser) {
+                        SPenSettings.prefs(this@OverlayService)
+                            .edit()
+                            .putFloat(SPenSettings.KEY_ERASER_WIDTH, width)
+                            .apply()
+                    }
+                }
+
+                override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
+                override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
+            }
+        )
+
+        eraserPage.findViewById<CheckBox?>(R.id.checkboxEraserPressure)?.setOnCheckedChangeListener { _, isChecked ->
+            drawingView?.eraserPressureEnabled = isChecked
+            saveDrawingSettings()
+        }
     }
     
     /**
@@ -908,6 +936,17 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
             android.content.res.ColorStateList.valueOf(
                 if (!isPixelMode) 0xFF4CAF50.toInt() else 0xFF888888.toInt()
             )
+    }
+
+    private fun updateEraserControls() {
+        val eraserPage = toolbarView?.findViewById<View>(R.id.eraserPage) ?: return
+        val eraserWidth = drawingView?.getStrokeWidthForTool(DrawingView.Tool.ERASER) ?: 30f
+        eraserPage.findViewById<SeekBar?>(R.id.eraserSizeSeekBar)?.progress =
+            (eraserWidth - 1).toInt().coerceIn(0, 99)
+        eraserPage.findViewById<android.widget.TextView?>(R.id.eraserSizeValue)?.text =
+            eraserWidth.toInt().toString()
+        eraserPage.findViewById<CheckBox?>(R.id.checkboxEraserPressure)?.isChecked =
+            drawingView?.eraserPressureEnabled == true
     }
 
     private fun toggleGradientMode() {
@@ -990,6 +1029,7 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
             }
             view.setColor(currentColor)
             view.eraserMode = SPenSettings.eraserMode(this)
+            view.eraserPressureEnabled = SPenSettings.eraserPressureEnabled(this)
             view.gradientBrushEnabled = isGradientModeEnabled
             view.currentGradient = SPenSettings.gradientPreset(this)
             view.setTool(SPenSettings.savedTool(this))
@@ -1022,6 +1062,7 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
             .putString(SPenSettings.KEY_SELECTED_TOOL, view.getTool().name)
             .putInt(SPenSettings.KEY_CURRENT_COLOR, currentColor)
             .putString(SPenSettings.KEY_ERASER_MODE, view.eraserMode.name)
+            .putBoolean(SPenSettings.KEY_ERASER_PRESSURE_ENABLED, view.eraserPressureEnabled)
             .putBoolean(SPenSettings.KEY_GRADIENT_ENABLED, isGradientModeEnabled)
             .putString(SPenSettings.KEY_GRADIENT_PRESET, view.currentGradient.name)
 
