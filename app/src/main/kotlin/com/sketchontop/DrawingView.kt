@@ -199,6 +199,9 @@ class DrawingView @JvmOverloads constructor(
     /** Whether stylus pressure changes eraser width */
     var eraserPressureEnabled: Boolean = false
 
+    /** Whether stylus pressure changes pen/highlighter width */
+    var penPressureEnabled: Boolean = false
+
     // ================================
     // Initialization
     // ================================
@@ -369,8 +372,12 @@ class DrawingView @JvmOverloads constructor(
         // Map pressure to stroke width:
         // At pressure 0: use 50% of base width
         // At pressure 1: use 100% of base width
-        val dynamicWidth = if ((isStylus || isStylusEraser) && (effectiveTool != Tool.ERASER || eraserPressureEnabled)) {
-            baseWidth * (0.5f + pressure * 0.5f)
+        val pressureEnabled = when (effectiveTool) {
+            Tool.ERASER -> eraserPressureEnabled
+            Tool.PEN, Tool.HIGHLIGHTER -> penPressureEnabled
+        }
+        val dynamicWidth = if ((isStylus || isStylusEraser) && pressureEnabled) {
+            pressureAdjustedWidth(baseWidth, pressure)
         } else {
             baseWidth  // No pressure adjustment for finger input
         }
@@ -742,6 +749,10 @@ class DrawingView @JvmOverloads constructor(
             currentPaint.strokeWidth = toolStrokeWidths[tool] ?: 10f
         }
     }
+
+    private fun pressureAdjustedWidth(baseWidth: Float, pressure: Float): Float {
+        return baseWidth * (0.9f + pressure.coerceIn(0f, 1f) * 0.35f)
+    }
     
     /**
      * Toggles visibility of all drawings.
@@ -835,8 +846,12 @@ class DrawingView @JvmOverloads constructor(
         }
         val pressure = event.pressure.coerceIn(0f, 1f)
         val baseWidth = toolStrokeWidths[effectiveTool] ?: 10f
-        val dynamicWidth = if (effectiveTool != Tool.ERASER || eraserPressureEnabled) {
-            baseWidth * (0.5f + pressure * 0.5f)
+        val pressureEnabled = when (effectiveTool) {
+            Tool.ERASER -> eraserPressureEnabled
+            Tool.PEN, Tool.HIGHLIGHTER -> penPressureEnabled
+        }
+        val dynamicWidth = if (pressureEnabled) {
+            pressureAdjustedWidth(baseWidth, pressure)
         } else {
             baseWidth
         }

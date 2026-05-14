@@ -234,6 +234,16 @@
             android:progressTint="@color/white"
             android:thumbTint="@color/white" />
 
+        <CheckBox
+            android:id="@+id/checkboxPenPressure"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:buttonTint="@color/toolbar_icon_tint"
+            android:checked="false"
+            android:text="Use pressure"
+            android:textColor="@color/white"
+            android:textSize="12sp" />
+
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"

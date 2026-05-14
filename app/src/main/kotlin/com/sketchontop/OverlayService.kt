@@ -318,15 +318,26 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
             MotionEvent.ACTION_DOWN -> {
                 accessibilityStylusStartedOnToolbar = isInsideToolbar
                 accessibilityStylusToolbarTarget = target
+                if (target is SeekBar) {
+                    dispatchAccessibilityStylusToTarget(target, event, MotionEvent.ACTION_DOWN)
+                }
                 return accessibilityStylusStartedOnToolbar
             }
             MotionEvent.ACTION_MOVE -> {
+                (accessibilityStylusToolbarTarget as? SeekBar)?.let {
+                    dispatchAccessibilityStylusToTarget(it, event, MotionEvent.ACTION_MOVE)
+                }
                 return accessibilityStylusStartedOnToolbar
             }
             MotionEvent.ACTION_UP -> {
                 if (accessibilityStylusStartedOnToolbar) {
                     accessibilityStylusStartedOnToolbar = false
-                    (target ?: accessibilityStylusToolbarTarget)?.performClick()
+                    val storedTarget = target ?: accessibilityStylusToolbarTarget
+                    if (storedTarget is SeekBar) {
+                        dispatchAccessibilityStylusToTarget(storedTarget, event, MotionEvent.ACTION_UP)
+                    } else {
+                        storedTarget?.performClick()
+                    }
                     accessibilityStylusToolbarTarget = null
                     return true
                 }
@@ -355,6 +366,46 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         return null
     }
 
+    private fun dispatchAccessibilityStylusToTarget(target: View, event: MotionEvent, action: Int) {
+        val point = getToolbarTargetLocalPoint(target, event) ?: return
+        val forwarded = MotionEvent.obtain(
+            event.downTime,
+            event.eventTime,
+            action,
+            point.first,
+            point.second,
+            event.pressure,
+            event.size,
+            event.metaState,
+            event.xPrecision,
+            event.yPrecision,
+            event.deviceId,
+            event.edgeFlags
+        )
+        try {
+            target.dispatchTouchEvent(forwarded)
+        } finally {
+            forwarded.recycle()
+        }
+    }
+
+    private fun getToolbarTargetLocalPoint(target: View, event: MotionEvent): Pair<Float, Float>? {
+        val targetLocation = IntArray(2)
+        target.getLocationOnScreen(targetLocation)
+        val rawX = event.rawX - targetLocation[0]
+        val rawY = event.rawY - targetLocation[1]
+        if (rawX >= 0f && rawX <= target.width && rawY >= 0f && rawY <= target.height) {
+            return rawX to rawY
+        }
+
+        val root = toolbarView ?: return null
+        val rootLocation = IntArray(2)
+        root.getLocationOnScreen(rootLocation)
+        val screenX = rootLocation[0] + event.x
+        val screenY = rootLocation[1] + event.y
+        return (screenX - targetLocation[0]) to (screenY - targetLocation[1])
+    }
+
     private fun isRawPointInsideView(rawX: Float, rawY: Float, view: View): Boolean {
         val location = IntArray(2)
         view.getLocationOnScreen(location)
@@ -374,7 +425,7 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
             }
         }
 
-        return if (view.isClickable || view.hasOnClickListeners()) view else null
+        return if (view is SeekBar || view.isClickable || view.hasOnClickListeners()) view else null
     }
 
     private fun findClickableChildAtLocal(view: View, localX: Float, localY: Float): View? {
@@ -394,7 +445,7 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
             }
         }
 
-        return if (view.isClickable || view.hasOnClickListeners()) view else null
+        return if (view is SeekBar || view.isClickable || view.hasOnClickListeners()) view else null
     }
 
     private fun removeOverlay() {
@@ -545,7 +596,11 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
                 }
             }
             view.findViewById<ImageButton?>(R.id.btnHighlighter)?.setOnClickListener { 
-                selectTool(DrawingView.Tool.HIGHLIGHTER) 
+                if (drawingView?.getTool() == DrawingView.Tool.HIGHLIGHTER) {
+                    selectTool(DrawingView.Tool.PEN)
+                } else {
+                    selectTool(DrawingView.Tool.HIGHLIGHTER)
+                }
             }
             view.findViewById<ImageButton>(R.id.btnEraser).setOnClickListener { 
                 if (drawingView?.getTool() == DrawingView.Tool.ERASER) {
@@ -624,6 +679,10 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
                     override fun onStopTrackingTouch(seekBar: SeekBar?) {}
                 }
             )
+            view.findViewById<CheckBox?>(R.id.checkboxPenPressure)?.setOnCheckedChangeListener { _, isChecked ->
+                drawingView?.penPressureEnabled = isChecked
+                saveDrawingSettings()
+            }
         }
     }
 
@@ -1030,6 +1089,7 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
             view.setColor(currentColor)
             view.eraserMode = SPenSettings.eraserMode(this)
             view.eraserPressureEnabled = SPenSettings.eraserPressureEnabled(this)
+            view.penPressureEnabled = SPenSettings.penPressureEnabled(this)
             view.gradientBrushEnabled = isGradientModeEnabled
             view.currentGradient = SPenSettings.gradientPreset(this)
             view.setTool(SPenSettings.savedTool(this))
@@ -1040,6 +1100,8 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         )
         toolbarView?.findViewById<HorizontalScrollView?>(R.id.gradientPresetsContainer)?.visibility =
             if (isGradientModeEnabled) View.VISIBLE else View.GONE
+        toolbarView?.findViewById<CheckBox?>(R.id.checkboxPenPressure)?.isChecked =
+            drawingView?.penPressureEnabled == true
         updateBrushPreview()
     }
 
@@ -1063,6 +1125,7 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
             .putInt(SPenSettings.KEY_CURRENT_COLOR, currentColor)
             .putString(SPenSettings.KEY_ERASER_MODE, view.eraserMode.name)
             .putBoolean(SPenSettings.KEY_ERASER_PRESSURE_ENABLED, view.eraserPressureEnabled)
+            .putBoolean(SPenSettings.KEY_PEN_PRESSURE_ENABLED, view.penPressureEnabled)
             .putBoolean(SPenSettings.KEY_GRADIENT_ENABLED, isGradientModeEnabled)
             .putString(SPenSettings.KEY_GRADIENT_PRESET, view.currentGradient.name)
 

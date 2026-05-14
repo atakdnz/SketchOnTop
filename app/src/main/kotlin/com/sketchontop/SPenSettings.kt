@@ -20,6 +20,7 @@ object SPenSettings {
     const val KEY_ERASER_WIDTH = "eraser_width"
     const val KEY_ERASER_MODE = "eraser_mode"
     const val KEY_ERASER_PRESSURE_ENABLED = "eraser_pressure_enabled"
+    const val KEY_PEN_PRESSURE_ENABLED = "pen_pressure_enabled"
     const val KEY_GRADIENT_ENABLED = "gradient_enabled"
     const val KEY_GRADIENT_PRESET = "gradient_preset"
 
@@ -108,6 +109,10 @@ object SPenSettings {
 
     fun eraserPressureEnabled(context: Context): Boolean {
         return prefs(context).getBoolean(KEY_ERASER_PRESSURE_ENABLED, false)
+    }
+
+    fun penPressureEnabled(context: Context): Boolean {
+        return prefs(context).getBoolean(KEY_PEN_PRESSURE_ENABLED, false)
     }
 
     fun gradientEnabled(context: Context): Boolean {
