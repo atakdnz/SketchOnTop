@@ -53,3 +53,6 @@ vcs.xml
 .DS_Store
 .AppleDouble
 .LSOverride
+
+# Private docs repo
+SketchOnTop_Docs/
