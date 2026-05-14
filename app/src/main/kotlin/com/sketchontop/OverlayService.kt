@@ -12,6 +12,7 @@ import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.os.Environment
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -25,7 +26,13 @@ import android.widget.HorizontalScrollView
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.SeekBar
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
+import java.io.File
+import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Foreground Service that creates a system overlay for drawing.
@@ -61,6 +68,7 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
     private var isDrawModeEnabled = true
     private var isSPenModeEnabled = false
     private var isGradientModeEnabled = false
+    private var isWhiteboardModeEnabled = false
     private var isToolbarExpanded = true
     private var currentColor = Color.BLACK
     private var accessibilityStylusInputEnabled = true
@@ -79,7 +87,7 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
     private val handler = Handler(Looper.getMainLooper())
     private val resetCanvasRunnable = Runnable { 
         // Re-enable canvas after finger touch
-        if (isSPenModeEnabled && isDrawModeEnabled) {
+        if (isSPenModeEnabled && isDrawModeEnabled && !isWhiteboardModeEnabled) {
             setCanvasTouchable(true)
         }
     }
@@ -136,7 +144,8 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
     }
 
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
-        if (key == SPenSettings.KEY_SPEN_BUTTON_TOGGLES_DRAW_MODE ||
+        if (key == SPenSettings.KEY_SPEN_MODE_ENABLED ||
+            key == SPenSettings.KEY_SPEN_BUTTON_TOGGLES_DRAW_MODE ||
             key == SPenSettings.KEY_FINGER_PASSTHROUGH_RESET_DELAY_MS ||
             key == SPenSettings.KEY_SPEN_BUTTON_REENABLE_DELAY_MS ||
             key == SPenSettings.KEY_HOVER_ARM_DRAWING ||
@@ -151,12 +160,14 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
     private fun loadSPenSettings() {
         accessibilityStylusInputEnabled = SPenSettings.accessibilityStylusInput(this)
         compactToolbarEnabled = SPenSettings.compactToolbar(this)
+        isSPenModeEnabled = SPenSettings.sPenModeEnabled(this)
         sPenButtonTogglesDrawMode = SPenSettings.sPenButtonTogglesDrawMode(this)
         fingerPassthroughResetDelayMs = SPenSettings.fingerPassthroughResetDelayMs(this)
         sPenButtonReenableDelayMs = SPenSettings.sPenButtonReenableDelayMs(this)
         hoverArmsDrawing = SPenSettings.hoverArmsDrawing(this)
         hoverExitDelayMs = SPenSettings.hoverExitDelayMs(this)
         drawingView?.sPenButtonTogglesDrawMode = sPenButtonTogglesDrawMode
+        drawingView?.sPenOnlyMode = isSPenModeEnabled
         drawingView?.hoverGateEnabled = hoverArmsDrawing
         if (!hoverArmsDrawing) {
             drawingView?.hoverDrawingArmed = true
@@ -261,6 +272,8 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         
         // Set default tool
         selectTool(DrawingView.Tool.PEN)
+        applySPenModeState()
+        setWhiteboardModeEnabled(isWhiteboardModeEnabled)
         
         // Enable toolbar dragging
         setupToolbarDrag()
@@ -279,7 +292,9 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
                         android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
                         StylusSensorService.isRunning
                     if (accessibilityStylusModeActive && isSPenModeEnabled) {
-                        setCanvasTouchable(false)
+                        if (!isWhiteboardModeEnabled) {
+                            setCanvasTouchable(false)
+                        }
                         if (!handleAccessibilityToolbarStylusEvent(event)) {
                             drawingView?.handleExternalStylusEvent(event)
                         }
@@ -370,7 +385,7 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         // When finger is detected in S Pen mode, make canvas non-touchable
         // so subsequent events in this gesture pass through
         drawingView?.onFingerTouchDetected = {
-            if (isSPenModeEnabled) {
+            if (isSPenModeEnabled && !isWhiteboardModeEnabled) {
                 // Make canvas non-touchable for this gesture
                 setCanvasTouchable(false)
                 
@@ -513,6 +528,12 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
             }
             view.findViewById<ImageButton?>(R.id.btnGradientMode)?.setOnClickListener { 
                 toggleGradientMode() 
+            }
+            view.findViewById<ImageButton?>(R.id.btnWhiteboardMode)?.setOnClickListener {
+                toggleWhiteboardMode()
+            }
+            view.findViewById<ImageButton?>(R.id.btnWhiteboardSnapshot)?.setOnClickListener {
+                saveWhiteboardSnapshot()
             }
             
             // Action buttons
@@ -726,22 +747,10 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
 
     private fun setDrawModeEnabled(enabled: Boolean) {
         isDrawModeEnabled = enabled
-        drawingView?.drawingEnabled = isDrawModeEnabled
-        
-        // Update canvas touchability
-        if (!isDrawModeEnabled) {
-            // Draw mode OFF: canvas non-touchable (everything passes through)
-            setCanvasTouchable(false)
-        } else {
-            if (accessibilityStylusModeActive && isSPenModeEnabled) {
-                setCanvasTouchable(false)
-            } else {
-                // Draw mode ON: canvas must be touchable to receive input
-                // (S Pen mode will handle finger passthrough dynamically)
-                setCanvasTouchable(true)
-            }
-        }
-        
+        drawingView?.drawingEnabled = isDrawModeEnabled || isWhiteboardModeEnabled
+
+        updateCanvasTouchability()
+
         // Update button tint
         toolbarView?.findViewById<ImageButton>(R.id.btnDrawMode)?.let { btn ->
             btn.setColorFilter(if (isDrawModeEnabled) 0xFF4CAF50.toInt() else 0xFF888888.toInt())
@@ -752,7 +761,7 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         isDrawModeEnabled = false
         drawingView?.drawingEnabled = true
         drawingView?.hoverDrawingArmed = false
-        setCanvasTouchable(true)
+        updateCanvasTouchability()
 
         toolbarView?.findViewById<ImageButton>(R.id.btnDrawMode)?.let { btn ->
             btn.setColorFilter(0xFF888888.toInt())
@@ -765,7 +774,11 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
      * it becomes non-touchable to pass through, then resets for next stylus.
      */
     private fun toggleSPenMode() {
-        isSPenModeEnabled = !isSPenModeEnabled
+        setSPenModeEnabled(!isSPenModeEnabled, persist = true)
+    }
+
+    private fun setSPenModeEnabled(enabled: Boolean, persist: Boolean) {
+        isSPenModeEnabled = enabled
         drawingView?.sPenOnlyMode = isSPenModeEnabled
         handler.removeCallbacks(resetCanvasRunnable)
         
@@ -774,17 +787,22 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
             android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
             StylusSensorService.isRunning
 
-        if (isSPenModeEnabled && isDrawModeEnabled && accessibilityStylusModeActive) {
-            setCanvasTouchable(false)
-        } else if (isSPenModeEnabled && isDrawModeEnabled) {
-            setCanvasTouchable(true)
-        } else if (!isSPenModeEnabled && isDrawModeEnabled) {
-            setCanvasTouchable(true)
-        }
+        updateCanvasTouchability()
         
         toolbarView?.findViewById<ImageButton>(R.id.btnSPenMode)?.let { btn ->
             btn.setColorFilter(if (isSPenModeEnabled) 0xFF2196F3.toInt() else 0xFFFFFFFF.toInt())
         }
+
+        if (persist) {
+            SPenSettings.prefs(this)
+                .edit()
+                .putBoolean(SPenSettings.KEY_SPEN_MODE_ENABLED, isSPenModeEnabled)
+                .apply()
+        }
+    }
+
+    private fun applySPenModeState() {
+        setSPenModeEnabled(isSPenModeEnabled, persist = false)
     }
     
     /**
@@ -856,6 +874,62 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
             )
             view.findViewById<HorizontalScrollView>(R.id.gradientPresetsContainer)?.visibility = 
                 if (isGradientModeEnabled) View.VISIBLE else View.GONE
+        }
+    }
+
+    private fun toggleWhiteboardMode() {
+        setWhiteboardModeEnabled(!isWhiteboardModeEnabled)
+    }
+
+    private fun setWhiteboardModeEnabled(enabled: Boolean) {
+        isWhiteboardModeEnabled = enabled
+        canvasView?.setBackgroundColor(if (enabled) Color.WHITE else Color.TRANSPARENT)
+        drawingView?.drawingEnabled = isDrawModeEnabled || enabled
+        drawingView?.whiteboardMode = enabled
+        handler.removeCallbacks(resetCanvasRunnable)
+        updateCanvasTouchability()
+
+        toolbarView?.findViewById<ImageButton?>(R.id.btnWhiteboardMode)?.setColorFilter(
+            if (enabled) 0xFF03A9F4.toInt() else 0xFFFFFFFF.toInt()
+        )
+        toolbarView?.findViewById<ImageButton?>(R.id.btnWhiteboardSnapshot)?.visibility =
+            if (enabled) View.VISIBLE else View.GONE
+    }
+
+    private fun saveWhiteboardSnapshot() {
+        if (!isWhiteboardModeEnabled) {
+            Toast.makeText(this, "Turn on whiteboard first", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val snapshot = drawingView?.createSnapshot(Color.WHITE)
+        if (snapshot == null) {
+            Toast.makeText(this, "Whiteboard is not ready yet", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        try {
+            val dir = File(getExternalFilesDir(Environment.DIRECTORY_PICTURES), "whiteboards")
+            if (!dir.exists()) dir.mkdirs()
+            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+            val file = File(dir, "SketchOnTop_$timestamp.png")
+            FileOutputStream(file).use { output ->
+                snapshot.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, output)
+            }
+            Toast.makeText(this, "Saved whiteboard snapshot", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "Could not save snapshot", Toast.LENGTH_SHORT).show()
+        } finally {
+            snapshot.recycle()
+        }
+    }
+
+    private fun updateCanvasTouchability() {
+        when {
+            isWhiteboardModeEnabled -> setCanvasTouchable(true)
+            !isDrawModeEnabled -> setCanvasTouchable(false)
+            accessibilityStylusModeActive && isSPenModeEnabled -> setCanvasTouchable(false)
+            else -> setCanvasTouchable(true)
         }
     }
 

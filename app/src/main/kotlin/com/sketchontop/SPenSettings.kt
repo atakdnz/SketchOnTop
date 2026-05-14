@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 
 object SPenSettings {
     const val PREFS_NAME = "sketch_on_top_settings"
+    const val KEY_SPEN_MODE_ENABLED = "spen_mode_enabled"
     const val KEY_SPEN_BUTTON_TOGGLES_DRAW_MODE = "spen_button_toggles_draw_mode"
     const val KEY_FINGER_PASSTHROUGH_RESET_DELAY_MS = "finger_passthrough_reset_delay_ms"
     const val KEY_SPEN_BUTTON_REENABLE_DELAY_MS = "spen_button_reenable_delay_ms"
@@ -26,6 +27,10 @@ object SPenSettings {
 
     fun sPenButtonTogglesDrawMode(context: Context): Boolean {
         return prefs(context).getBoolean(KEY_SPEN_BUTTON_TOGGLES_DRAW_MODE, false)
+    }
+
+    fun sPenModeEnabled(context: Context): Boolean {
+        return prefs(context).getBoolean(KEY_SPEN_MODE_ENABLED, false)
     }
 
     fun fingerPassthroughResetDelayMs(context: Context): Long {

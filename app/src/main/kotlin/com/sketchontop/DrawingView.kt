@@ -97,6 +97,9 @@ class DrawingView @JvmOverloads constructor(
     
     /** S Pen only mode: fingers pass through, only stylus can draw */
     var sPenOnlyMode: Boolean = false
+
+    /** Whiteboard mode captures normal drawing input even when S Pen mode is enabled */
+    var whiteboardMode: Boolean = false
     
     /** Callback when finger touch is detected in S Pen mode - used for dynamic FLAG toggle */
     var onFingerTouchDetected: (() -> Unit)? = null
@@ -321,7 +324,7 @@ class DrawingView @JvmOverloads constructor(
         }
         
         // S Pen only mode: allow stylus to draw, fingers pass through
-        if (sPenOnlyMode && isFinger) {
+        if (sPenOnlyMode && isFinger && !whiteboardMode) {
             // Notify on ACTION_DOWN so OverlayService can toggle FLAG_NOT_TOUCHABLE
             if (event.actionMasked == MotionEvent.ACTION_DOWN) {
                 onFingerTouchDetected?.invoke()
@@ -735,6 +738,17 @@ class DrawingView @JvmOverloads constructor(
         drawingsVisible = !drawingsVisible
         invalidate()
         return drawingsVisible
+    }
+
+    fun createSnapshot(backgroundColor: Int): Bitmap? {
+        val source = bitmap ?: return null
+        val snapshot = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(snapshot)
+        canvas.drawColor(backgroundColor)
+        if (drawingsVisible) {
+            canvas.drawBitmap(source, 0f, 0f, bitmapPaint)
+        }
+        return snapshot
     }
     
     /**

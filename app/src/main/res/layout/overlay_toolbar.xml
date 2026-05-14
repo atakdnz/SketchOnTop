@@ -66,6 +66,18 @@
                 android:tint="@color/toolbar_icon_tint" />
 
             <ImageButton
+                android:id="@+id/btnWhiteboardSnapshot"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="@drawable/tool_button_background"
+                android:contentDescription="Save whiteboard"
+                android:padding="6dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_camera"
+                android:tint="@color/toolbar_icon_tint"
+                android:visibility="gone" />
+
+            <ImageButton
                 android:id="@+id/btnClose"
                 android:layout_width="32dp"
                 android:layout_height="32dp"
@@ -121,6 +133,17 @@
                 android:padding="6dp"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_gradient"
+                android:tint="@color/toolbar_icon_tint" />
+
+            <ImageButton
+                android:id="@+id/btnWhiteboardMode"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:background="@drawable/tool_button_background"
+                android:contentDescription="Whiteboard"
+                android:padding="6dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_whiteboard"
                 android:tint="@color/toolbar_icon_tint" />
 
         </LinearLayout>
